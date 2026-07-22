@@ -1,0 +1,51 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #faf7f2;
+  --ink: #231f20;
+  --amber: #e8963a;
+  --teal: #2b5f5c;
+  --line: #e4ddd0;
+}
+
+body {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+h1, h2, h3, .font-display {
+  font-family: "Fraunces", ui-serif, Georgia, serif;
+}
+
+.font-mono-tight {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* visible keyboard focus everywhere, not just on :hover */
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Smooth expand/collapse without JS height measurement: animating
+   grid-template-rows between 0fr and 1fr, with an overflow-hidden child,
+   is a lightweight CSS-only way to animate to "auto" height. */
+.accordion {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+.accordion[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+.accordion-inner {
+  overflow: hidden;
+}
+

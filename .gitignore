@@ -1,0 +1,22 @@
+# dependencies
+/node_modules
+
+# Next.js build output
+/.next/
+/out/
+
+# production build
+/build
+
+# env files -- never commit real secrets
+.env
+.env*.local
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+*.zip
+
+# Prisma
+/prisma/*.db

@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // works great on a free Supabase or Neon Postgres instance
+  url      = env("DATABASE_URL")
+}
+
+// ---- NextAuth required tables ----
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  refresh_token_expires_in Int?
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---- App tables ----
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  timezone String @default("America/Denver")
+
+  accounts           Account[]
+  sessions           Session[]
+  connectedCalendars ConnectedCalendar[]
+  eventsCreated      Event[]            @relation("EventCreator")
+  savedGroups        SavedGroup[]
+  participations     EventParticipant[]
+  knownContacts      KnownContact[]
+
+  createdAt DateTime @default(now())
+}
+
+model ConnectedCalendar {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider CalendarProvider
+
+  // Google/Microsoft: points at the NextAuth Account (internal id) holding
+  // the OAuth tokens for this calendar.
+  nextAuthAccountId String?
+
+  // Apple/iCloud (CalDAV) has no OAuth token -- store the CalDAV endpoint
+  // and an *encrypted* app-specific password instead.
+  caldavUrl               String?
+  caldavUsername          String?
+  caldavPasswordEncrypted String?
+
+  label     String // e.g. "Google (dan@gmail.com)", "iCloud"
+  isEnabled Boolean @default(true)
+
+  sources CalendarSource[]
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// One specific calendar *within* a connected account -- e.g. inside a
+// single Google account you might have "Personal", "Work", "US Holidays",
+// a shared family calendar, etc. Mirrors Calendly's per-calendar toggles:
+// any number can count toward availability, and at most one across the
+// user's ENTIRE set of connected accounts is the write target.
+model CalendarSource {
+  id                  String            @id @default(cuid())
+  connectedCalendarId String
+  connectedCalendar   ConnectedCalendar @relation(fields: [connectedCalendarId], references: [id], onDelete: Cascade)
+
+  externalId String // provider's own calendar id (Google calendarId, Graph calendar id, or CalDAV calendar URL)
+  label      String // e.g. "Personal", "Work Blocks", "US Holidays"
+
+  checkAvailability Boolean @default(true) // does this calendar's busy time count against the user?
+  isWriteTarget     Boolean @default(false) // is this THE calendar new confirmed events get created on?
+
+  createdAt DateTime @default(now())
+
+  @@unique([connectedCalendarId, externalId])
+}
+
+enum CalendarProvider {
+  GOOGLE
+  MICROSOFT
+  APPLE_CALDAV
+}
+
+// A reusable named list of people + default search filters, e.g. "Family Dinner Crew".
+model SavedGroup {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name           String
+  emails         String[] // participant emails, doesn't require them to have accounts yet
+  defaultFilters Json? // same shape as Event.filters, pre-fills the create-event form
+
+  createdAt DateTime @default(now())
+}
+
+// One "find us a time" search.
+model Event {
+  id        String @id @default(cuid())
+  creatorId String
+  creator   User   @relation("EventCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  location    String?
+  durationMin Int
+  searchStart DateTime // first day to search, in the creator's timezone
+  searchEnd   DateTime // last day to search (inclusive), in the creator's timezone
+  timezone    String  // IANA tz captured from the creator's browser at creation time
+
+  // day-of-week + time-of-day windows to restrict the search to, same shape
+  // as the old weeklyHours: { "thu": [["18:00","23:00"]], "sat": [["09:00","18:00"]] }
+  // an empty/missing object means "any day, any time"
+  filters Json
+
+  minAttendees Int? // optional hard floor; null = show all slots regardless of headcount
+
+  // Optional ranked-choice voting phase. When enabled, each CONNECTED
+  // participant (organizer included) ranks their top voteTopX preferred
+  // slots before the organizer confirms one -- confirming never requires
+  // votes to exist, this is purely an extra signal shown alongside
+  // availability, not a gate on the process.
+  votingEnabled Boolean @default(false)
+  voteTopX      Int? // how many ranked picks each participant gets; only meaningful when votingEnabled
+
+  status EventStatus @default(SEARCHING)
+
+  confirmedStart  DateTime?
+  confirmedEnd    DateTime?
+  externalEventId String? // id of the event created on the calendar below, once confirmed
+
+  // Which specific calendar the confirmed event was actually written to,
+  // captured at confirm time. Rescheduling/cancelling always target this
+  // same calendar, even if the organizer changes their write-target
+  // setting afterward -- otherwise a reschedule could try to patch an
+  // event that lives on a different calendar than the one now marked
+  // "write target" and silently fail.
+  writeCalendarSourceId String?
+
+  participants EventParticipant[]
+  votes        EventVote[]
+
+  createdAt DateTime @default(now())
+
+  @@index([creatorId])
+}
+
+enum EventStatus {
+  SEARCHING
+  CONFIRMED
+  CANCELLED
+}
+
+// One invited person on an Event. Starts as just an email; gets linked to a
+// User once they sign in and connect a calendar.
+model EventParticipant {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  email  String
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  status ParticipantStatus @default(INVITED)
+
+  votes EventVote[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, email])
+}
+
+enum ParticipantStatus {
+  INVITED // added, hasn't connected a calendar yet -- excluded from slot math
+  CONNECTED // calendar connected, counted in availability
+}
+
+// One ranked pick on one participant's ballot -- e.g. "this participant's
+// 2nd choice is the slot starting at 6pm Thursday." Slots aren't their own
+// database rows (they're computed on the fly from calendar data), so a
+// vote identifies its slot by start time rather than a foreign key.
+model EventVote {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  participantId String
+  participant   EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  slotStart DateTime
+  rank      Int // 1 = first choice, 2 = second choice, etc.
+
+  createdAt DateTime @default(now())
+
+  @@unique([participantId, slotStart]) // can't vote for the same slot twice
+  @@unique([participantId, rank]) // can't have two different slots at the same rank
+}
+
+// An email a user has previously added to any event or saved group --
+// purely a personal autocomplete list, not a real "friends" relationship
+// (no reciprocity, no acceptance). Lets the email input suggest addresses
+// you've typed before instead of retyping the same person every time.
+model KnownContact {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  email String
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, email])
+}
