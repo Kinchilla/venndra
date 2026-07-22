@@ -11,9 +11,9 @@ export default async function SiteHeader() {
       <div className="mx-auto grid max-w-5xl grid-cols-3 items-center px-6 py-3">
         <span aria-hidden="true" />
 
-        <Link href="/" aria-label="Venndra — home" className="inline-flex items-baseline justify-self-center gap-[1px]">
+        <Link href="/" aria-label="Venndra — home" className="inline-flex items-baseline justify-self-center">
           <span className="font-display text-lg font-semibold">Ve</span>
-          <Logo height={17} className="relative top-[3px] mx-[1px]" />
+          <Logo height={9.5} className="relative top-[0.5px]" />
           <span className="font-display text-lg font-semibold">dra</span>
         </Link>
 

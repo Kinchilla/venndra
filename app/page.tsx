@@ -10,7 +10,7 @@ export default async function Home() {
       <section className="grid gap-12 sm:grid-cols-2 sm:items-center">
         <div>
           <p className="mb-3 font-mono-tight text-xs uppercase tracking-widest text-teal">
-            the scheduling app for friend groups
+            the social scheduling app
           </p>
           <h1 className="font-display text-5xl font-semibold leading-[1.05] sm:text-6xl">
             Stop asking

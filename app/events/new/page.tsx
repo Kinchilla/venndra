@@ -26,7 +26,7 @@ export default function NewEventPage() {
   const [groups, setGroups] = useState<SavedGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-  const [title, setTitle] = useState("Family Dinner");
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [durationHours, setDurationHours] = useState(2);
@@ -122,30 +122,10 @@ export default function NewEventPage() {
       <h1 className="font-display text-2xl font-semibold">Find us a time</h1>
       <p className="mt-1 text-ink/60">Everyone below needs to connect a calendar to be counted.</p>
 
-      {groups.length > 0 && (
-        <div className="mt-6">
-          <p className="mb-2 text-sm text-ink/60">Start from a saved group</p>
-          <div className="flex flex-wrap gap-2">
-            {groups.map((g) => (
-              <button
-                type="button"
-                key={g.id}
-                onClick={() => applyGroup(g.id)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedGroupId === g.id ? "border-amber bg-amber/10 text-amber" : "border-line text-ink/60"
-                }`}
-              >
-                {g.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="mt-6 grid gap-5">
         <label className="text-sm">
           <span className="mb-1 block text-ink/60">Event name</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required className="w-full rounded-lg border border-line px-3 py-2" />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Game Night" required className="w-full rounded-lg border border-line px-3 py-2" />
         </label>
 
         <div className="text-sm">
@@ -203,6 +183,26 @@ export default function NewEventPage() {
           <span className="mb-1 block text-ink/60">Location (optional)</span>
           <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-lg border border-line px-3 py-2" />
         </label>
+
+        {groups.length > 0 && (
+          <div className="mt-1">
+            <p className="mb-2 text-sm text-ink/60">Start from a saved group</p>
+            <div className="flex flex-wrap gap-2">
+              {groups.map((g) => (
+                <button
+                  type="button"
+                  key={g.id}
+                  onClick={() => applyGroup(g.id)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    selectedGroupId === g.id ? "border-amber bg-amber/10 text-amber" : "border-line text-ink/60"
+                  }`}
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <label className="text-sm">
           <span className="mb-1 block text-ink/60">People to include</span>
