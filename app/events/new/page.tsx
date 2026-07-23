@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { addMonths } from "date-fns";
 import EmailListInput from "../../../components/EmailListInput";
 import FiltersBuilder, { WeeklyHours } from "../../../components/FiltersBuilder";
@@ -184,30 +185,34 @@ export default function NewEventPage() {
           <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-lg border border-line px-3 py-2" />
         </label>
 
-        {groups.length > 0 && (
-          <div className="mt-1">
-            <p className="mb-2 text-sm text-ink/60">Start from a saved group</p>
-            <div className="flex flex-wrap gap-2">
-              {groups.map((g) => (
-                <button
-                  type="button"
-                  key={g.id}
-                  onClick={() => applyGroup(g.id)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    selectedGroupId === g.id ? "border-amber bg-amber/10 text-amber" : "border-line text-ink/60"
-                  }`}
-                >
-                  {g.name}
-                </button>
-              ))}
-            </div>
+        <div>
+          <p className="mb-2 text-sm text-ink/60">Start from a saved group</p>
+          <div className="flex flex-wrap gap-2">
+            {groups.map((g) => (
+              <button
+                type="button"
+                key={g.id}
+                onClick={() => applyGroup(g.id)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  selectedGroupId === g.id ? "border-amber bg-amber/10 text-amber" : "border-line text-ink/60 hover:border-amber hover:text-amber"
+                }`}
+              >
+                {g.name}
+              </button>
+            ))}
+            <Link
+              href="/groups/new"
+              className="rounded-full border border-dashed border-line px-3 py-1.5 text-xs font-medium text-ink/60 hover:border-ink hover:text-ink transition-colors"
+            >
+              + New group
+            </Link>
           </div>
-        )}
+        </div>
 
-        <label className="text-sm">
+        <div className="text-sm">
           <span className="mb-1 block text-ink/60">People to include</span>
           <EmailListInput emails={emails} onChange={setEmails} />
-        </label>
+        </div>
 
         <div className="text-sm">
           <span className="mb-1 block text-ink/60">Only look at</span>

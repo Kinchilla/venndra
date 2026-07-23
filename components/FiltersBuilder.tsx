@@ -98,7 +98,7 @@ export default function FiltersBuilder({
                 key={d.key}
                 onClick={() => toggleDay(rule.id, d.key)}
                 className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                  rule.days.includes(d.key) ? "border-amber bg-amber/10 text-amber" : "border-line text-ink/50"
+                  rule.days.includes(d.key) ? "border-amber bg-amber/10 text-amber" : "border-line text-ink/50 hover:border-amber hover:text-amber"
                 }`}
               >
                 {d.label}

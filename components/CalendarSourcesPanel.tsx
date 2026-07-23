@@ -10,7 +10,6 @@ const PROVIDER_LABEL: Record<string, string> = { GOOGLE: "Google", MICROSOFT: "M
 
 export default function CalendarSourcesPanel() {
   const [calendars, setCalendars] = useState<CalendarAccount[] | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
 
   useEffect(() => {
     load(true);
@@ -23,25 +22,53 @@ export default function CalendarSourcesPanel() {
   }
 
   async function toggleCheck(sourceId: string, checkAvailability: boolean) {
-    setPending(sourceId);
-    await fetch(`/api/calendars/sources/${sourceId}`, {
+    setCalendars((prev) =>
+      prev
+        ? prev.map((account) => ({
+            ...account,
+            sources: account.sources.map((s) => (s.id === sourceId ? { ...s, checkAvailability } : s)),
+          }))
+        : prev
+    );
+
+    const res = await fetch(`/api/calendars/sources/${sourceId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ checkAvailability }),
     });
-    setPending(null);
-    load();
+
+    if (!res.ok) {
+      setCalendars((prev) =>
+        prev
+          ? prev.map((account) => ({
+              ...account,
+              sources: account.sources.map((s) => (s.id === sourceId ? { ...s, checkAvailability: !checkAvailability } : s)),
+            }))
+          : prev
+      );
+    }
   }
 
   async function setWriteTarget(sourceId: string) {
-    setPending(sourceId);
-    await fetch(`/api/calendars/sources/${sourceId}`, {
+    const previous = calendars;
+    setCalendars((prev) =>
+      prev
+        ? prev.map((account) => ({
+            ...account,
+            sources: account.sources.map((s) => ({ ...s, isWriteTarget: s.id === sourceId })),
+          }))
+        : prev
+    );
+
+    const res = await fetch(`/api/calendars/sources/${sourceId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isWriteTarget: true }),
     });
-    setPending(null);
-    load();
+
+    if (!res.ok) {
+      setCalendars(previous);
+    }
   }
 
   if (!calendars) return <p className="text-sm text-ink/50">Loading calendars…</p>;
@@ -78,7 +105,6 @@ export default function CalendarSourcesPanel() {
                 <input
                   type="checkbox"
                   checked={source.checkAvailability}
-                  disabled={pending === source.id}
                   onChange={(e) => toggleCheck(source.id, e.target.checked)}
                 />
               </td>
@@ -87,7 +113,7 @@ export default function CalendarSourcesPanel() {
                   type="radio"
                   name="writeTarget"
                   checked={source.isWriteTarget}
-                  disabled={pending === source.id || account.provider === "APPLE_CALDAV"}
+                  disabled={account.provider === "APPLE_CALDAV"}
                   onChange={() => setWriteTarget(source.id)}
                   title={account.provider === "APPLE_CALDAV" ? "iCloud calendars can't be a write target yet" : undefined}
                 />
