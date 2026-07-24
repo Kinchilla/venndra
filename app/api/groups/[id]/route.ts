@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { recordKnownContacts } from "../../../../lib/knownContacts";
+import { validateAllFriends } from "../../../../lib/friends";
 
 const groupSchema = z.object({
   name: z.string().min(1).max(60),
@@ -36,6 +37,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const parsed = groupSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  if (!session.user.email) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
+  const friendError = await validateAllFriends((session.user as any).id, session.user.email, parsed.data.emails);
+  if (friendError) return NextResponse.json({ error: friendError }, { status: 400 });
 
   // Deliberately does NOT touch any Event already created from this group --
   // events capture their own participant list at creation time, so editing

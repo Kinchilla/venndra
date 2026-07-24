@@ -1,17 +1,26 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../lib/auth";
+import Logo from "../components/Logo";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-16 sm:py-24">
+      <div className="mb-14 text-center">
+        <div aria-label="Venndra" className="inline-flex items-baseline justify-center">
+          <span className="font-display text-7xl font-semibold" aria-hidden="true">Ve</span>
+          <Logo height={38} className="relative top-[2px]" />
+          <span className="font-display text-7xl font-semibold" aria-hidden="true">dra</span>
+        </div>
+        <p className="mt-3 font-mono-tight text-xs uppercase tracking-widest text-teal">
+          the social scheduling app
+        </p>
+      </div>
+
       <section className="grid gap-12 sm:grid-cols-2 sm:items-center">
         <div>
-          <p className="mb-3 font-mono-tight text-xs uppercase tracking-widest text-teal">
-            the social scheduling app
-          </p>
           <h1 className="font-display text-5xl font-semibold leading-[1.05] sm:text-6xl">
             Stop asking
             <br />

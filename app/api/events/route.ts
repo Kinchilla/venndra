@@ -5,6 +5,7 @@ import { fromZonedTime } from "date-fns-tz";
 import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { recordKnownContacts } from "../../../lib/knownContacts";
+import { validateAllFriends } from "../../../lib/friends";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -64,6 +65,13 @@ export async function POST(req: NextRequest) {
   // included if the client included them -- the "new event" form defaults
   // to pre-filling the creator's own email, but they're free to remove it.
   const allEmails = Array.from(new Set(parsed.data.emails));
+
+  // Every invited email (other than the creator's own) must belong to an
+  // accepted friend -- the picker UI already only offers friends, but this
+  // is the actual enforcement point, since a raw API request could
+  // otherwise bypass the UI entirely.
+  const friendError = await validateAllFriends(userId, creator.email, allEmails);
+  if (friendError) return NextResponse.json({ error: friendError }, { status: 400 });
 
   const existingUsers = await prisma.user.findMany({
     where: { email: { in: allEmails } },

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import EmailListInput from "./EmailListInput";
+import FriendPicker from "./FriendPicker";
 import FiltersBuilder, { WeeklyHours } from "./FiltersBuilder";
 
 export default function GroupForm({
@@ -26,6 +26,7 @@ export default function GroupForm({
   const [filters, setFilters] = useState<WeeklyHours>(initialFilters ?? {});
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pickerHasPendingText, setPickerHasPendingText] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Same "default to including yourself, but only once" pattern as the
@@ -39,8 +40,25 @@ export default function GroupForm({
     }
   }, [isEditing, session, selfPrefilled]);
 
+  // Cache this once known, rather than re-deriving it fresh from
+  // useSession() on every render -- that hook can transiently report
+  // nothing during background revalidation, which was causing the self
+  // chip to flicker out of existence for no real reason (the underlying
+  // email was always still there in `emails`, this is purely a display
+  // issue with re-deriving from a source that isn't always stable).
+  const [cachedCurrentUser, setCachedCurrentUser] = useState<{ email: string; name: string | null; image: string | null } | null>(null);
+  useEffect(() => {
+    if (session?.user?.email) {
+      setCachedCurrentUser({ email: session.user.email, name: session.user.name ?? null, image: session.user.image ?? null });
+    }
+  }, [session]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (pickerHasPendingText) {
+      setError('Finish adding or clear the text in "Friends" before saving.');
+      return;
+    }
     if (emails.length === 0) {
       setError("Add at least one friend's email.");
       return;
@@ -90,7 +108,12 @@ export default function GroupForm({
 
       <label className="text-sm">
         <span className="mb-1 block text-ink/60">Friends</span>
-        <EmailListInput emails={emails} onChange={setEmails} />
+        <FriendPicker
+          emails={emails}
+          onChange={setEmails}
+          onPendingTextChange={setPickerHasPendingText}
+          currentUser={cachedCurrentUser}
+        />
       </label>
 
       <div className="text-sm">
@@ -101,7 +124,7 @@ export default function GroupForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3">
-        <button type="submit" disabled={submitting} className="w-fit rounded-full bg-amber px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={submitting || pickerHasPendingText} className="w-fit rounded-full bg-amber px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">
           {submitting ? "Saving…" : isEditing ? "Save changes" : "Save group"}
         </button>
         {isEditing && (

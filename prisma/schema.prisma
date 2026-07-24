@@ -63,6 +63,8 @@ model User {
   savedGroups        SavedGroup[]
   participations     EventParticipant[]
   knownContacts      KnownContact[]
+  friendshipsSent     Friendship[] @relation("FriendshipRequester")
+  friendshipsReceived Friendship[] @relation("FriendshipAddressee")
 
   createdAt DateTime @default(now())
 }
@@ -251,4 +253,27 @@ model KnownContact {
   createdAt DateTime @default(now())
 
   @@unique([userId, email])
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+// One row represents a request, which becomes mutual once accepted.
+// Remove/cancel/decline are all the same underlying action (deleting the
+// row) -- they only differ in which side of the relationship is doing it
+// and what label makes sense to show them.
+model Friendship {
+  id          String @id @default(cuid())
+  requesterId String
+  requester   User   @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String
+  addressee   User   @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  status FriendshipStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+
+  @@unique([requesterId, addresseeId])
 }

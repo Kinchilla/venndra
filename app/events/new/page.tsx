@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { addMonths } from "date-fns";
-import EmailListInput from "../../../components/EmailListInput";
+import FriendPicker from "../../../components/FriendPicker";
 import FiltersBuilder, { WeeklyHours } from "../../../components/FiltersBuilder";
 import BackButton from "../../../components/BackButton";
 
@@ -43,6 +43,7 @@ export default function NewEventPage() {
   const [voteTopX, setVoteTopX] = useState(3);
 
   const [submitting, setSubmitting] = useState(false);
+  const [pickerHasPendingText, setPickerHasPendingText] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,6 +64,13 @@ export default function NewEventPage() {
     }
   }, [session, selfPrefilled]);
 
+  const [cachedCurrentUser, setCachedCurrentUser] = useState<{ email: string; name: string | null; image: string | null } | null>(null);
+  useEffect(() => {
+    if (session?.user?.email) {
+      setCachedCurrentUser({ email: session.user.email, name: session.user.name ?? null, image: session.user.image ?? null });
+    }
+  }, [session]);
+
   function applyGroup(groupId: string) {
     setSelectedGroupId(groupId);
     const group = groups.find((g) => g.id === groupId);
@@ -74,6 +82,10 @@ export default function NewEventPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (pickerHasPendingText) {
+      setError('Finish adding or clear the text in "People to include" before starting the search.');
+      return;
+    }
     if (emails.length === 0) {
       setError("Add at least one friend's email.");
       return;
@@ -121,7 +133,6 @@ export default function NewEventPage() {
     <main className="mx-auto max-w-lg px-6 py-12">
       <BackButton fallbackHref="/events" />
       <h1 className="font-display text-2xl font-semibold">Find us a time</h1>
-      <p className="mt-1 text-ink/60">Everyone below needs to connect a calendar to be counted.</p>
 
       <form onSubmit={handleSubmit} className="mt-6 grid gap-5">
         <label className="text-sm">
@@ -211,7 +222,12 @@ export default function NewEventPage() {
 
         <div className="text-sm">
           <span className="mb-1 block text-ink/60">People to include</span>
-          <EmailListInput emails={emails} onChange={setEmails} />
+          <FriendPicker
+            emails={emails}
+            onChange={setEmails}
+            currentUser={cachedCurrentUser}
+            onPendingTextChange={setPickerHasPendingText}
+          />
         </div>
 
         <div className="text-sm">
@@ -259,7 +275,7 @@ export default function NewEventPage() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button type="submit" disabled={submitting} className="w-fit rounded-full bg-amber px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={submitting || pickerHasPendingText} className="w-fit rounded-full bg-amber px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">
           {submitting ? "Searching…" : "Start the search"}
         </button>
       </form>
