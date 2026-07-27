@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import BackButton from "../../../components/BackButton";
+import SuggestedFriendsSection from "../../../components/SuggestedFriendsSection";
 
 export default function NewFriendPage() {
   const router = useRouter();
@@ -87,6 +88,8 @@ export default function NewFriendPage() {
           {submitting ? "Sending…" : "Send request"}
         </button>
       </form>
+
+      <SuggestedFriendsSection />
     </main>
   );
 }

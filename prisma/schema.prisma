@@ -65,6 +65,8 @@ model User {
   knownContacts      KnownContact[]
   friendshipsSent     Friendship[] @relation("FriendshipRequester")
   friendshipsReceived Friendship[] @relation("FriendshipAddressee")
+  dismissedSuggestionsMade     DismissedSuggestion[] @relation("DismissedSuggestionUser")
+  dismissedSuggestionsReceived DismissedSuggestion[] @relation("DismissedSuggestionTarget")
 
   createdAt DateTime @default(now())
 }
@@ -276,4 +278,22 @@ model Friendship {
   createdAt DateTime @default(now())
 
   @@unique([requesterId, addresseeId])
+}
+
+// Tracks suggestions a user has explicitly dismissed, so they don't keep
+// reappearing on /friends/new. Deliberately permanent (no auto-expiry) --
+// simple and consistent with how "decline" on an actual request works
+// (no record kept, but here we specifically WANT a record, since the
+// whole point is remembering not to suggest this person again).
+model DismissedSuggestion {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("DismissedSuggestionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  dismissedUserId String
+  dismissedUser   User   @relation("DismissedSuggestionTarget", fields: [dismissedUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dismissedUserId])
 }
