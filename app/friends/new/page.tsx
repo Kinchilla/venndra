@@ -47,7 +47,9 @@ export default function NewFriendPage() {
       return;
     }
     setSuccess(true);
-    setTimeout(() => router.push("/friends"), 900);
+    setEmail("");
+    setCheckResult(null);
+    setTimeout(() => setSuccess(false), 2000);
   }
 
   return (
