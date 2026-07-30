@@ -3,14 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type ParticipantStatus = "free" | "tentative" | "busy" | "unknown";
+type ParticipantStatus = "free" | "tentative" | "busy" | "unknown" | "error";
 type ParticipantAvailability = { email: string; name: string | null; status: ParticipantStatus };
 type Slot = {
   start: string;
   end: string;
   availableCount: number;
   totalConnected: number;
-  hasTentative: boolean;
   participants: ParticipantAvailability[];
 };
 type SortMode = "headcount" | "time" | "votes";
@@ -514,7 +513,6 @@ function SlotRow({
             {showDate && <>{formatDate(slot.start)}, </>}
             {formatTime(slot.start, timeFormat)} – {formatTime(slot.end, timeFormat)}
           </span>
-          {slot.hasTentative && <span title="Someone's only tentatively free">⚠️</span>}
         </span>
         <span className="flex items-center gap-2">
           {votes && (
@@ -561,6 +559,7 @@ function SlotRow({
                       </span>
                     )}
                     {p.status === "unknown" && <span className="text-xs text-ink/30">(hasn't connected a calendar)</span>}
+                    {p.status === "error" && <span className="text-xs text-orange-500/70">(couldn't check their calendar)</span>}
                   </li>
                 );
               })}
@@ -626,6 +625,13 @@ function StatusIcon({ status }: { status: ParticipantStatus }) {
     return (
       <span className={`${common} bg-amber`} title="Tentative" aria-label="Tentative">
         <span className="text-[10px] font-bold leading-none">?</span>
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className={`${common} bg-orange-500`} title="Couldn't check their calendar right now" aria-label="Error">
+        <span className="text-[10px] font-bold leading-none">!</span>
       </span>
     );
   }

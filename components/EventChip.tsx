@@ -25,20 +25,6 @@ type EventChipData = {
 const DAY_LABELS: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 const DAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
-// Renders `fallback` on the very first pass (both server and the client's
-// initial hydration render use this same fixed string, so nothing can
-// mismatch), then swaps to the real, locale-formatted result right after
-// mounting in the browser -- which uses that specific viewer's own real
-// locale, not one guessed on the server or hardcoded by us.
-function useClientFormatted(compute: () => string, fallback: string): string {
-  const [value, setValue] = useState(fallback);
-  useEffect(() => {
-    setValue(compute());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return value;
-}
-
 function formatDateRange(startIso: string, endIso: string): string {
   const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
   return `${new Date(startIso).toLocaleDateString(undefined, opts)} – ${new Date(endIso).toLocaleDateString(undefined, opts)}`;
@@ -67,6 +53,23 @@ function formatFilters(filters: Record<string, [string, string][]>): string {
   return [...byWindow.entries()].map(([key, days]) => `${days.join(", ")}: ${key.replace("-", "–")}`).join(" · ");
 }
 
+// Renders `fallback` on the very first pass (both server and the client's
+// initial hydration render use this same fixed string, so nothing can
+// mismatch), then swaps to the real, locale-formatted result right after
+// mounting in the browser. Deliberately client-only rather than reading
+// the Accept-Language header server-side -- Brave (and possibly other
+// privacy-focused browsers) intentionally randomizes that header as a
+// fingerprinting defense, independent of what the browser's own real
+// Intl calls actually use, so the two can genuinely disagree.
+function useClientFormatted(compute: () => string, fallback: string): string {
+  const [value, setValue] = useState(fallback);
+  useEffect(() => {
+    setValue(compute());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return value;
+}
+
 export default function EventChip({ event }: { event: EventChipData }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -85,6 +88,14 @@ export default function EventChip({ event }: { event: EventChipData }) {
       const body = await res.json().catch(() => null);
       setActionError(typeof body?.error === "string" ? body.error : "Couldn't cancel this event.");
     }
+  }
+
+  function handleEdit() {
+    // Deliberately doesn't cancel the original here -- that only happens
+    // once the replacement search is actually submitted successfully
+    // (see app/events/new/page.tsx), so there's always exactly one live
+    // version of this search, never a gap where neither exists.
+    router.push(`/events/new?fromEvent=${event.id}`);
   }
 
   async function handleReschedule() {
@@ -119,14 +130,14 @@ export default function EventChip({ event }: { event: EventChipData }) {
       event.status === "CONFIRMED" && event.confirmedStart && event.confirmedEnd
         ? formatConfirmed(event.confirmedStart, event.confirmedEnd)
         : formatDateRange(event.searchStart, event.searchEnd),
-    `${event.searchStart.slice(5, 10)} – ${event.searchEnd.slice(5, 10)}`
+    `${event.searchStart.slice(5, 7)}/${event.searchStart.slice(8, 10)} – ${event.searchEnd.slice(5, 7)}/${event.searchEnd.slice(8, 10)}`
   );
 
   const searchWindowText = useClientFormatted(
     () => formatDateRange(event.searchStart, event.searchEnd),
-    `${event.searchStart.slice(5, 10)} – ${event.searchEnd.slice(5, 10)}`
+    `${event.searchStart.slice(5, 7)}/${event.searchStart.slice(8, 10)} – ${event.searchEnd.slice(5, 7)}/${event.searchEnd.slice(8, 10)}`
   );
-
+  
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-white">
       <button
@@ -181,6 +192,15 @@ export default function EventChip({ event }: { event: EventChipData }) {
                 <Link href={`/events/${event.id}`} className="inline-block rounded-full bg-amber px-4 py-2 text-sm font-medium text-white">
                   Pick a time
                 </Link>
+                {event.isOrganizer && (
+                  <button
+                    onClick={handleEdit}
+                    disabled={actionLoading !== null}
+                    className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal disabled:opacity-50"
+                  >
+                    Edit this search
+                  </button>
+                )}
                 {event.isOrganizer && (
                   <button
                     onClick={handleCancel}

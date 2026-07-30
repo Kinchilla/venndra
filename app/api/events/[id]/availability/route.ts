@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { computeGroupAvailability } from "../../../../../lib/availability";
+import { checkRateLimit } from "../../../../../lib/rateLimit";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -18,6 +19,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const isInvolved =
     event.creatorId === userId || event.participants.some((p) => p.email === session.user!.email);
   if (!isInvolved) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const allowed = await checkRateLimit("availability", userId, 30);
+  if (!allowed) {
+    return NextResponse.json({ error: "You're checking this too frequently — wait a moment and try again." }, { status: 429 });
+  }
 
   let slots = await computeGroupAvailability({
     creatorTimezone: event.timezone,
@@ -52,7 +58,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       end: s.end.toISOString(),
       availableCount: s.availableCount,
       totalConnected: s.totalConnected,
-      hasTentative: s.hasTentative,
       participants: s.participants,
     })),
   });

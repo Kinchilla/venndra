@@ -14,11 +14,13 @@ app/                 every URL route lives here, one folder per page
   page.tsx            → the landing page ("/")
   login/page.tsx       → "/login"
   events/page.tsx      → "/events"
-  settings/page.tsx    → "/settings"
   events/new/page.tsx  → "/events/new" ("Find us a time" form)
   events/[id]/page.tsx → "/events/some-id" (one event's results page)
+  friends/page.tsx      → "/friends"
+  friends/new/page.tsx  → "/friends/new" (send a friend request)
   groups/new/page.tsx  → "/groups/new"
   groups/[id]/edit/    → "/groups/some-id/edit"
+  settings/page.tsx    → "/settings"
   api/                 → backend logic, not visible pages (routes your
                           browser calls behind the scenes)
 components/           reusable pieces used across multiple pages
@@ -44,9 +46,9 @@ inside a `.tsx` file, wrapped in something like `<p>...</p>` or
 1. Figure out which page it's on, then open that page's `page.tsx` (see
    the map above). If the text is *inside a form* (e.g. the "Find us a
    time" form's fields), it's often actually in a shared `components/`
-   file instead — e.g. the email-chip input lives in
-   `components/EmailListInput.tsx`, the day/time picker in
-   `components/FiltersBuilder.tsx`.
+   file instead — e.g. the friends picker used on both `/events/new` and
+   the saved-group form lives in `components/FriendPicker.tsx`, the
+   day/time picker in `components/FiltersBuilder.tsx`.
 2. Use your editor's search (Ctrl+F in most editors) for a few words of
    the exact text you want to change.
 3. Edit the text between the tags. Leave the `className="..."` styling
@@ -86,19 +88,39 @@ database and need nothing beyond saving the file. You only need a
 migration when you change `prisma/schema.prisma` itself — adding a new
 field to a model, adding a new model, etc.
 
-If you do edit `schema.prisma`:
+**Step 1 — apply it locally:**
 
 ```bash
-# 1. stop npm run dev first (see gotcha above)
+# stop npm run dev first (see gotcha above)
 npx prisma migrate dev --name describe_your_change_briefly
-# 2. restart npm run dev
+# then restart npm run dev
 ```
 
-That command both updates your actual Neon database to match the new
+That command both updates your local Neon database to match the new
 schema, and regenerates the code the app uses to talk to it. Use a short,
 descriptive name in place of `describe_your_change_briefly` (e.g.
 `add_profile_bio_field`) — it's just a label for your own migration
 history, shown as a filename under `prisma/migrations/`.
+
+**Step 2 — apply it to production too, *before* pushing the code live:**
+
+```bash
+DATABASE_URL="your-production-connection-string-here" npx prisma migrate deploy
+```
+
+This is easy to forget, and it's bitten us more than once — **local dev
+and production are two completely separate databases**, with separate
+connection strings. Running `migrate dev` only ever touches your local
+one. If you push code that expects a table/column production doesn't
+have yet, the live site breaks the moment someone hits that feature, even
+though everything works perfectly on your machine. Note it's `migrate
+deploy` here, not `migrate dev` — deploy just applies your existing
+migration history as-is, without prompting for a new name, which is
+exactly right for a database that isn't supposed to have anything new
+*invented* for it, just replayed.
+
+Always do this **before** `git push`, not after — that way there's never
+a window where live code and the live database disagree.
 
 ---
 
@@ -139,35 +161,32 @@ Microsoft account can just try signing in.
 
 ---
 
-## 7. Getting updates from Claude
+## 7. Getting changes into the app, and out to the live site
 
-Claude keeps one continuously-evolving copy of the project's source code.
-Every change discussed in chat gets applied to that copy directly, one
-file at a time — a "zip download" is just a snapshot of everything
-accumulated since your last one, not a separate branch. Practically:
+The project is on GitHub (`github.com/Kinchilla/venndra`), and Vercel is
+connected to it directly — **any push to the `main` branch automatically
+triggers a live deployment**, no manual step needed on Vercel's side.
+That's the real, current workflow; there's no separate "download a zip
+from Claude" step anymore for getting things live.
 
-- **Small, single-file changes** (a text tweak, a one-line logic fix):
-  Claude can usually just tell you the exact edit to make by hand — often
-  faster than a full folder swap.
-- **Bigger, multi-file changes**: grab a fresh zip, extract it into a new
-  folder, then copy **two things** over from your previous folder before
-  running anything:
-  1. `.env` — never included in the zip, since it holds your real secrets.
-  2. `prisma/migrations/` — **also never included in the zip.** This
-     folder only ever gets created locally, the first time you run
-     `npx prisma migrate dev` on your own machine — Claude's own sandbox
-     can't generate it (a network restriction on Claude's end blocks the
-     command that creates it). If you skip carrying this folder over,
-     Prisma will see your fresh folder as having *no* migration history
-     while your actual database remembers every migration you've really
-     run — and will prompt to **reset the entire database** to
-     reconcile, which deletes all your data. Always copy this folder
-     forward; never let Prisma "fix" the mismatch by resetting unless
-     you've genuinely decided you don't need the existing data.
-  3. Then `npm install` in the new folder.
-- **Database changes**: only run `npx prisma migrate dev` if Claude
-  specifically says the schema changed. Most feature updates don't touch
-  the database at all.
+**Making an edit, day to day:**
+
+1. Claude describes the exact change (which file, what to find, what to
+   replace it with) — you apply it directly in your own editor. For
+   anything touching the database, see section 4 above first.
+2. Test it locally (`npm run dev`).
+3. `git add .` → `git commit -m "..."` → `git push`. Vercel picks it up
+   within moments and deploys automatically.
+
+**If Claude's own working copy ever needs to catch up with yours**
+(e.g. after a stretch of hands-on edits, or if a fresh Claude
+conversation needs current context): either point it at the GitHub repo
+directly, or — if that's not working for some reason — zip up the
+project folder yourself (excluding `node_modules`, `.next`, `.git`, and
+`.env`) and upload it. Either way, Claude's copy is just a convenience
+for giving you precise instructions; **GitHub is the actual source of
+truth for the code**, and Vercel always deploys from there, not from
+anything Claude has on hand.
 
 ---
 
@@ -180,16 +199,26 @@ accumulated since your last one, not a separate branch. Practically:
 | SWC binary error (`not a valid Win32 application`) | Corrupted/incomplete download | Delete `node_modules`, run `npm install` again |
 | `EPERM: operation not permitted, unlink ...` | Dev server running while trying to run a Prisma command | Stop `npm run dev` first, then retry |
 | Bounced back to login with `?error=OAuthAccountNotLinked` | A previous sign-in attempt partially failed, leaving an orphaned user record | `npx prisma migrate reset` (wipes and cleanly reapplies — fine for dev data) |
-| `We need to reset the "public" schema... All data will be lost` | `prisma/migrations/` wasn't carried over into a freshly-extracted folder (see section 7) | Say **no**, copy `prisma/migrations/` over from your previous folder, then retry the migrate command |
+| `We need to reset the "public" schema... All data will be lost` | `prisma/migrations/` is missing or out of sync with what the database actually remembers | Say **no**, track down a copy of `prisma/migrations/` from wherever it still exists, and make sure it's always carried forward into any new folder alongside `.env` |
 | `does not exist in tenant 'Microsoft Services'` | Microsoft app registration is set to single-tenant only | Fix "Supported account types" — see section 6 above |
 | Page takes 10-50+ seconds to load the *first* time | Normal — Next.js compiles each page on first visit in dev mode | Not a bug; every page after the first visit in that session is fast |
-| Prisma commands fail with a 403 on `binaries.prisma.sh` | This only happens in Claude's own sandbox (network-restricted), not on your machine | N/A for you — just context for why Claude sometimes can't fully verify a build |
+| A hydration error appears specifically around a form `<input>`, especially email/password-shaped ones | Very often a browser extension (password manager, form-filler) modifying the page before React finishes loading, not a real code bug | Test in an incognito/private window *early* — if it disappears there, it's an extension, not something to keep debugging in the code |
+| `429` errors on the results page, or when joining an event, especially during active multi-person usage | The rate limiter (`lib/rateLimit.ts`) — currently 30 requests/minute on availability checks, 10/minute on joining an event, tracked per user | If it's happening during genuine normal use, the threshold's too strict for real usage patterns and worth raising. If it's a tight burst from one account, that's it working as intended |
+| A wave of "couldn't check their calendar" errors arriving all at once across multiple accounts | Possibly the rate limiter's threshold being hit is causing calendar-provider requests to get throttled upstream too, not an individual token problem | Check whether it correlates with unusually rapid/repeated requests around the same time, rather than assuming it's the token-expiry issue from before |
+| Prisma commands fail with a 403 on `binaries.prisma.sh` | This only happens in Claude's own sandbox (network-restricted), not on your machine | N/A for you — just context for why Claude sometimes can't fully verify a build itself |
 
 ---
 
 ## 9. What's not built yet (known gaps)
 
-See the "Known limitations" section near the bottom of `README.md` for
-the full list — a few highlights: no Apple/iCloud event write-back, no
-custom invite-notification emails, no rate limiting on public-ish
-endpoints, and the app isn't deployed anywhere yet (still local-only).
+For the full, actively-maintained list of deferred features, known small
+bugs, and legal/business open questions, see `venndra-next-steps.md` in
+the Claude Project's knowledge base — that's the living backlog now,
+kept current as things get built or new ideas come up, rather than
+duplicated here where it could quietly drift out of sync.
+
+A couple of things worth knowing right in this file, since they affect
+how you work day to day: Apple/iCloud calendars are still read-only (can
+contribute to availability, but can never receive the actual confirmed
+event), and there's still no custom invite-notification email — invites
+currently ride entirely on the calendar provider's own notification.

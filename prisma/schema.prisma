@@ -297,3 +297,9 @@ model DismissedSuggestion {
 
   @@unique([userId, dismissedUserId])
 }
+
+model RateLimitState {
+  key         String   @id
+  windowStart DateTime
+  count       Int      @default(0)
+}

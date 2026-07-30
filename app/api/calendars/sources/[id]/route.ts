@@ -33,12 +33,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       );
     }
     // Exactly one write target across the user's ENTIRE set of connected
-    // calendars, not just within this account.
-    await prisma.calendarSource.updateMany({
-      where: { connectedCalendar: { userId } },
-      data: { isWriteTarget: false },
-    });
-    await prisma.calendarSource.update({ where: { id: source.id }, data: { isWriteTarget: true } });
+    // calendars, not just within this account. These two writes run as a
+    // single atomic transaction -- doing them as two separately-awaited
+    // calls left a real window where the database briefly had ZERO write
+    // targets set, which a concurrent calendar sync could observe and
+    // "helpfully" auto-assign the primary calendar back, silently
+    // clobbering the user's actual selection. This is very likely what
+    // happened to the friend who reported this.
+    await prisma.$transaction([
+      prisma.calendarSource.updateMany({
+        where: { connectedCalendar: { userId } },
+        data: { isWriteTarget: false },
+      }),
+      prisma.calendarSource.update({ where: { id: source.id }, data: { isWriteTarget: true } }),
+    ]);
   }
 
   if (typeof parsed.data.checkAvailability === "boolean") {

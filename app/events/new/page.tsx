@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { addMonths } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { useSearchParams } from "next/navigation";
 import FriendPicker from "../../../components/FriendPicker";
 import FiltersBuilder, { WeeklyHours } from "../../../components/FiltersBuilder";
 import BackButton from "../../../components/BackButton";
@@ -21,8 +23,41 @@ function localDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// Converts a stored UTC instant back into the correct YYYY-MM-DD in the
+// event's OWN timezone -- not necessarily the current browser's, since
+// naively slicing the ISO string can land on the wrong calendar day near
+// timezone boundaries (exactly the bug localDateString itself exists to
+// avoid, just now needing to reverse a stored value instead of "now").
+function isoToLocalDateString(iso: string, timezone: string): string {
+  return localDateString(toZonedTime(new Date(iso), timezone));
+}
+
+/** Backs a number input with its own raw TEXT state instead of binding
+ *  directly to a number -- letting the field stay genuinely empty while
+ *  focused, rather than snapping to "0" the instant it's cleared (since
+ *  Number("") === 0, a plain number-bound input can never actually be
+ *  empty, which is what caused the old "erase then type 2, get 02" bug).
+ *  `numericValue` is what the rest of the component should actually use;
+ *  `floor` is only applied once the field is blurred while still empty. */
+function useNumberField(initial: number, floor: number) {
+  const [text, setText] = useState(String(initial));
+  const parsed = Number(text);
+  const numericValue = text.trim() === "" || Number.isNaN(parsed) ? floor : parsed;
+
+  return {
+    text,
+    numericValue,
+    setValue: (n: number) => setText(String(n)),
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value),
+    onBlur: () => {
+      if (text.trim() === "") setText(String(floor));
+    },
+  };
+}
+
 export default function NewEventPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [groups, setGroups] = useState<SavedGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -30,17 +65,17 @@ export default function NewEventPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
-  const [durationHours, setDurationHours] = useState(2);
-  const [durationMinutes, setDurationMinutes] = useState(0);
-  const durationMin = durationHours * 60 + durationMinutes;
+  const durationHoursField = useNumberField(2, 0);
+  const durationMinutesField = useNumberField(0, 0);
+  const durationMin = durationHoursField.numericValue * 60 + durationMinutesField.numericValue;
   const [startDate, setStartDate] = useState(() => localDateString(new Date()));
   const [endDate, setEndDate] = useState(() => localDateString(addMonths(new Date(), 1)));
   const [emails, setEmails] = useState<string[]>([]);
   const [filters, setFilters] = useState<WeeklyHours>({});
   const [useThreshold, setUseThreshold] = useState(true);
-  const [minAttendees, setMinAttendees] = useState(1);
+  const minAttendeesField = useNumberField(1, 1);
   const [votingEnabled, setVotingEnabled] = useState(false);
-  const [voteTopX, setVoteTopX] = useState(3);
+  const voteTopXField = useNumberField(3, 1);
 
   const [submitting, setSubmitting] = useState(false);
   const [pickerHasPendingText, setPickerHasPendingText] = useState(false);
@@ -63,6 +98,41 @@ export default function NewEventPage() {
       setSelfPrefilled(true);
     }
   }, [session, selfPrefilled]);
+
+  // "Edit this search" (triggered from a Still Deciding chip on /events)
+  // lands here with ?fromEvent=<id> -- pull that event's full parameters
+  // and populate the form with them. Marks selfPrefilled true regardless
+  // of outcome, so the plain self-prefill effect above never fights with
+  // this one over the emails list.
+  const [prefilledFromEvent, setPrefilledFromEvent] = useState(false);
+  useEffect(() => {
+    const fromEventId = searchParams.get("fromEvent");
+    if (!fromEventId || prefilledFromEvent) return;
+    setPrefilledFromEvent(true);
+    setSelfPrefilled(true);
+
+    fetch(`/api/events/${fromEventId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const event = data?.event;
+        if (!event) return; // invalid id, or not involved in it -- fail quietly, leave the form at its normal defaults
+
+        setTitle(event.title);
+        setDescription(event.description ?? "");
+        setLocation(event.location ?? "");
+        durationHoursField.setValue(Math.floor(event.durationMin / 60));
+        durationMinutesField.setValue(event.durationMin % 60);
+        setStartDate(isoToLocalDateString(event.searchStart, event.timezone));
+        setEndDate(isoToLocalDateString(event.searchEnd, event.timezone));
+        setFilters(event.filters ?? {});
+        setUseThreshold(event.minAttendees != null);
+        if (event.minAttendees != null) minAttendeesField.setValue(event.minAttendees);
+        setVotingEnabled(event.votingEnabled);
+        if (event.voteTopX != null) voteTopXField.setValue(event.voteTopX);
+        setEmails(event.participants.map((p: any) => p.email));
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, prefilledFromEvent]);
 
   const [cachedCurrentUser, setCachedCurrentUser] = useState<{ email: string; name: string | null; image: string | null } | null>(null);
   useEffect(() => {
@@ -113,9 +183,9 @@ export default function NewEventPage() {
         searchEnd: endDate,
         timezone: (session?.user as any)?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
         filters,
-        minAttendees: useThreshold ? minAttendees : undefined,
+        minAttendees: useThreshold ? minAttendeesField.numericValue : undefined,
         votingEnabled,
-        voteTopX: votingEnabled ? voteTopX : undefined,
+        voteTopX: votingEnabled ? voteTopXField.numericValue : undefined,
         emails,
       }),
     });
@@ -126,6 +196,16 @@ export default function NewEventPage() {
       return;
     }
     const { event } = await res.json();
+
+    // If this form was opened via "Edit this search," only cancel the
+    // original NOW that its replacement genuinely exists -- not fired-
+    // and-forgotten to block navigation on, since the new event already
+    // exists regardless of whether this cleanup step succeeds.
+    const fromEventId = searchParams.get("fromEvent");
+    if (fromEventId) {
+      fetch(`/api/events/${fromEventId}/cancel`, { method: "POST" }).catch(() => {});
+    }
+
     router.push(`/events/${event.id}`);
   }
 
@@ -148,8 +228,9 @@ export default function NewEventPage() {
               min={0}
               max={24}
               step={1}
-              value={durationHours}
-              onChange={(e) => setDurationHours(Number(e.target.value))}
+              value={durationHoursField.text}
+              onChange={durationHoursField.onChange}
+              onBlur={durationHoursField.onBlur}
               className="w-16 rounded-lg border border-line px-2 py-2 text-center"
             />
             <span className="text-ink/60">hours</span>
@@ -158,8 +239,9 @@ export default function NewEventPage() {
               min={0}
               max={59}
               step={5}
-              value={durationMinutes}
-              onChange={(e) => setDurationMinutes(Number(e.target.value))}
+              value={durationMinutesField.text}
+              onChange={durationMinutesField.onChange}
+              onBlur={durationMinutesField.onBlur}
               className="w-16 rounded-lg border border-line px-2 py-2 text-center"
             />
             <span className="text-ink/60">minutes</span>
@@ -242,12 +324,13 @@ export default function NewEventPage() {
             type="number"
             min={1}
             max={emails.length + 1 || 1}
-            value={minAttendees}
-            onChange={(e) => setMinAttendees(Number(e.target.value))}
+            value={minAttendeesField.text}
+            onChange={minAttendeesField.onChange}
+            onBlur={minAttendeesField.onBlur}
             disabled={!useThreshold}
             className="w-16 rounded-lg border border-line px-2 py-1 disabled:opacity-40"
           />
-          <span className="text-ink/70">{minAttendees === 1 ? "person" : "people"} free</span>
+          <span className="text-ink/70">{minAttendeesField.numericValue === 1 ? "person" : "people"} free</span>
         </label>
 
         <div>
@@ -263,8 +346,9 @@ export default function NewEventPage() {
                   type="number"
                   min={1}
                   max={10}
-                  value={voteTopX}
-                  onChange={(e) => setVoteTopX(Number(e.target.value))}
+                  value={voteTopXField.text}
+                  onChange={voteTopXField.onChange}
+                  onBlur={voteTopXField.onBlur}
                   className="w-16 rounded-lg border border-line px-2 py-1"
                 />
                 <span className="text-ink/70">times</span>

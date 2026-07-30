@@ -65,8 +65,9 @@ export async function getMicrosoftBusyIntervals(
   calendarIds: string[],
   timeMin: Date,
   timeMax: Date
-): Promise<BusyInterval[]> {
+): Promise<{ intervals: BusyInterval[]; hasError: boolean }> {
   const client = await getGraphClient(accountId);
+  let hasError = false;
 
   const results = await Promise.all(
     calendarIds.map(async (calendarId) => {
@@ -87,12 +88,13 @@ export async function getMicrosoftBusyIntervals(
           }));
       } catch (err) {
         console.error(`Failed to read Microsoft calendar ${calendarId}:`, err);
+        hasError = true;
         return [];
       }
     })
   );
 
-  return results.flat();
+  return { intervals: results.flat(), hasError };
 }
 
 /** Creates an event on a specific calendar in this account and invites the given attendees. */

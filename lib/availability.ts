@@ -12,7 +12,7 @@ type WeeklyHours = Record<string, [string, string][]>;
 export type ParticipantAvailability = {
   email: string;
   name: string | null; // null if they haven't connected an account under this email yet
-  status: "free" | "tentative" | "busy" | "unknown"; // "unknown" = hasn't connected a calendar yet
+  status: "free" | "tentative" | "busy" | "unknown" | "error"; // "unknown" = hasn't connected a calendar yet; "error" = couldn't read their calendar (e.g. an expired token)
 };
 
 export type Slot = {
@@ -20,7 +20,6 @@ export type Slot = {
   end: Date;
   availableCount: number; // free + tentative, excludes busy and unknown
   totalConnected: number; // how many participants have a calendar connected at all
-  hasTentative: boolean;
   participants: ParticipantAvailability[];
 };
 
@@ -29,16 +28,16 @@ function overlaps(aStart: Date, aEnd: Date, b: BusyInterval): boolean {
 }
 
 /** Fetches merged busy intervals across every calendar a user has opted in for availability checking. */
-async function getUserBusyIntervals(userId: string, from: Date, to: Date): Promise<BusyInterval[]> {
+async function getUserBusyIntervals(userId: string, from: Date, to: Date): Promise<{ intervals: BusyInterval[]; hasError: boolean }> {
   const connectedCalendars = await prisma.connectedCalendar.findMany({
     where: { userId, isEnabled: true },
     include: { sources: { where: { checkAvailability: true } } },
   });
 
   const results = await Promise.all(
-    connectedCalendars.map(async (cal) => {
+    connectedCalendars.map(async (cal): Promise<{ intervals: BusyInterval[]; hasError: boolean }> => {
       const calendarIds = cal.sources.map((s) => s.externalId);
-      if (calendarIds.length === 0) return []; // account connected but every calendar toggled off
+      if (calendarIds.length === 0) return { intervals: [], hasError: false };
 
       try {
         if (cal.provider === "GOOGLE" && cal.nextAuthAccountId) {
@@ -48,19 +47,21 @@ async function getUserBusyIntervals(userId: string, from: Date, to: Date): Promi
           return await getMicrosoftBusyIntervals(cal.nextAuthAccountId, calendarIds, from, to);
         }
         if (cal.provider === "APPLE_CALDAV") {
-          return await getAppleBusyIntervals(cal.id, calendarIds, from, to);
+          const intervals = await getAppleBusyIntervals(cal.id, calendarIds, from, to);
+          return { intervals, hasError: false };
         }
-        return [];
+        return { intervals: [], hasError: false };
       } catch (err) {
-        // One misbehaving account (e.g. an expired token) shouldn't take
-        // down availability for the whole group -- log and skip it.
         console.error(`Failed to fetch busy intervals for connected calendar ${cal.id}:`, err);
-        return [];
+        return { intervals: [], hasError: true };
       }
     })
   );
 
-  return results.flat();
+  return {
+    intervals: results.flatMap((r) => r.intervals),
+    hasError: results.some((r) => r.hasError),
+  };
 }
 
 function pad(n: number): string {
@@ -91,10 +92,12 @@ export async function computeGroupAvailability(params: {
   const connected = participants.filter((p) => p.status === "CONNECTED" && p.userId);
 
   const busyByEmail = new Map<string, BusyInterval[]>();
+  const errorByEmail = new Map<string, boolean>();
   await Promise.all(
     connected.map(async (p) => {
-      const intervals = await getUserBusyIntervals(p.userId!, windowStart, windowEnd);
+      const { intervals, hasError } = await getUserBusyIntervals(p.userId!, windowStart, windowEnd);
       busyByEmail.set(p.email, intervals);
+      errorByEmail.set(p.email, hasError);
     })
   );
 
@@ -130,6 +133,7 @@ export async function computeGroupAvailability(params: {
         if (slotStart >= now) {
           const participantStatuses: ParticipantAvailability[] = participants.map((p) => {
             if (p.status === "INVITED" || !p.userId) return { email: p.email, name: null, status: "unknown" };
+            if (errorByEmail.get(p.email)) return { email: p.email, name: p.name, status: "error" };
 
             const busy = busyByEmail.get(p.email) ?? [];
             const conflicts = busy.filter((b) => overlaps(slotStart, slotEnd, b));
@@ -138,16 +142,13 @@ export async function computeGroupAvailability(params: {
             return { email: p.email, name: p.name, status: "free" };
           });
 
-          const availableCount = participantStatuses.filter(
-            (p) => p.status === "free" || p.status === "tentative"
-          ).length;
+          const availableCount = participantStatuses.filter((p) => p.status === "free").length;
 
           slots.push({
             start: slotStart,
             end: slotEnd,
             availableCount,
             totalConnected: connected.length,
-            hasTentative: participantStatuses.some((p) => p.status === "tentative"),
             participants: participantStatuses,
           });
         }
