@@ -139,3 +139,24 @@ export async function deleteMicrosoftEvent(accountId: string, eventId: string): 
   const client = await getGraphClient(accountId);
   await client.api(`/me/events/${eventId}`).delete();
 }
+
+/**
+ * Removes a single attendee from an existing event without cancelling it for
+ * everyone else. Same reasoning as removeGoogleAttendee: Graph has no
+ * dedicated per-attendee removal endpoint, so this fetches the current
+ * attendee list, filters out the departing person, and patches it back.
+ * Graph event ids are unique across the whole mailbox (same as
+ * updateMicrosoftEventTime above), so no calendarId is needed here either.
+ */
+export async function removeMicrosoftAttendee(
+  accountId: string,
+  eventId: string,
+  attendeeEmail: string
+): Promise<void> {
+  const client = await getGraphClient(accountId);
+  const existing = await client.api(`/me/events/${eventId}`).select("attendees").get();
+  const attendees = (existing.attendees ?? []).filter(
+    (a: any) => a.emailAddress?.address?.toLowerCase() !== attendeeEmail.toLowerCase()
+  );
+  await client.api(`/me/events/${eventId}`).patch({ attendees });
+}

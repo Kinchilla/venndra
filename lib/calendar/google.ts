@@ -171,3 +171,28 @@ export async function deleteGoogleEvent(accountId: string, calendarId: string, e
   const calendar = await getGoogleClient(accountId);
   await calendar.events.delete({ calendarId, eventId, sendUpdates: "all" });
 }
+
+/**
+ * Removes a single attendee from an existing event without cancelling it for
+ * everyone else. Google's API has no dedicated "remove one attendee"
+ * endpoint -- the standard approach is fetching the current attendee list,
+ * filtering out the departing person, and patching the full list back.
+ */
+export async function removeGoogleAttendee(
+  accountId: string,
+  calendarId: string,
+  eventId: string,
+  attendeeEmail: string
+): Promise<void> {
+  const calendar = await getGoogleClient(accountId);
+  const existing = await calendar.events.get({ calendarId, eventId });
+  const attendees = (existing.data.attendees ?? []).filter(
+    (a) => a.email?.toLowerCase() !== attendeeEmail.toLowerCase()
+  );
+  await calendar.events.patch({
+    calendarId,
+    eventId,
+    sendUpdates: "all",
+    requestBody: { attendees },
+  });
+}
