@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 
@@ -23,9 +24,21 @@ export async function PATCH(req: NextRequest) {
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
+  // Prisma's Json? fields treat a plain JS `null` as ambiguous -- it can't
+  // tell "clear this field" apart from "field wasn't sent at all" the same
+  // way it can for ordinary nullable columns. Prisma.JsonNull is the
+  // required sentinel for an explicit "set this JSON column to NULL" --
+  // needed here since "Reset to app default" sends defaultSearchFilters:
+  // null on purpose, not just omits it.
+  const { defaultSearchFilters, ...rest } = parsed.data;
   const user = await prisma.user.update({
     where: { id: (session.user as any).id },
-    data: parsed.data,
+    data: {
+      ...rest,
+      ...(defaultSearchFilters !== undefined && {
+        defaultSearchFilters: defaultSearchFilters === null ? Prisma.JsonNull : defaultSearchFilters,
+      }),
+    },
   });
 
   return NextResponse.json({
