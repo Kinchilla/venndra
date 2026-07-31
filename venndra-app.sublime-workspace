@@ -44,8 +44,15 @@
 	],
 	"file_history":
 	[
-		"/C/Users/dckin/Desktop/venndra-app/app/events/new/page.tsx",
+		"/C/Users/dckin/Desktop/venndra-app/app/api/me/route.ts",
+		"/C/Users/dckin/Desktop/venndra-app/prisma/schema.prisma",
+		"/C/Users/dckin/Desktop/venndra-app/components/DefaultSearchTimesForm.tsx",
 		"/C/Users/dckin/Desktop/venndra-app/components/EventChip.tsx",
+		"/C/Users/dckin/Desktop/venndra-app/app/events/new/page.tsx",
+		"/C/Users/dckin/Desktop/venndra-app/components/NewEventForm.tsx",
+		"/C/Users/dckin/Desktop/venndra-app/app/settings/page.tsx",
+		"/C/Users/dckin/Desktop/venndra-app/app/api/events/[id]/cancel/route.ts",
+		"/C/Users/dckin/Desktop/venndra-app/app/api/events/[id]/leave/route.ts",
 		"/C/Users/dckin/Desktop/venndra-app/app/events/page.tsx",
 		"/C/Users/dckin/Desktop/venndra-app/lib/calendarSources.ts",
 		"/C/Users/dckin/Desktop/venndra-app/app/api/events/[id]/confirm/route.ts",
@@ -57,7 +64,6 @@
 		"/C/Users/dckin/Desktop/venndra-app/EDITING_GUIDE.md",
 		"/C/Users/dckin/Desktop/venndra-app/.env",
 		"/C/Users/dckin/Desktop/venndra-app/lib/rateLimit.ts",
-		"/C/Users/dckin/Desktop/venndra-app/prisma/schema.prisma",
 		"/C/Users/dckin/Desktop/venndra-app/app/api/events/[id]/availability/route.ts",
 		"/C/Users/dckin/Desktop/venndra-app/app/api/events/[id]/join/route.ts",
 		"/C/Users/dckin/Desktop/venndra-app/lib/availability.ts",
@@ -67,7 +73,6 @@
 		"/C/Users/dckin/Desktop/venndra-app/components/SuggestedFriendChip.tsx",
 		"/C/Users/dckin/Desktop/venndra-app/app/friends/new/page.tsx",
 		"/C/Users/dckin/Desktop/venndra-app/components/SiteHeader.tsx",
-		"/C/Users/dckin/Desktop/venndra-app/app/settings/page.tsx",
 		"/C/Users/dckin/Desktop/venndra-app/app/page.tsx",
 		"/C/Users/dckin/Downloads/venndra-project-context.md",
 		"/C/Users/dckin/Desktop/venndra-app/app/api/friends/suggestions/route.ts",
@@ -114,7 +119,7 @@
 	],
 	"find":
 	{
-		"height": 147.0
+		"height": 57.0
 	},
 	"find_in_files":
 	{
@@ -131,6 +136,8 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"FiltersBuilder",
+			"searching",
 			"const [action",
 			"StatusIcon",
 			"sugge",
@@ -164,7 +171,7 @@
 	],
 	"incremental_find":
 	{
-		"height": 135.0
+		"height": 45.0
 	},
 	"input":
 	{
@@ -204,7 +211,7 @@
 	"project": "venndra-app.sublime-project",
 	"replace":
 	{
-		"height": 266.0
+		"height": 86.0
 	},
 	"save_all_on_build": true,
 	"select_file":

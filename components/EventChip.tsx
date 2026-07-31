@@ -73,7 +73,7 @@ function useClientFormatted(compute: () => string, fallback: string): string {
 export default function EventChip({ event }: { event: EventChipData }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
-  const [actionLoading, setActionLoading] = useState<"cancel" | "reopen" | null>(null);
+  const [actionLoading, setActionLoading] = useState<"cancel" | "reopen" | "leave" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function handleCancel() {
@@ -89,6 +89,20 @@ export default function EventChip({ event }: { event: EventChipData }) {
       setActionError(typeof body?.error === "string" ? body.error : "Couldn't cancel this event.");
     }
   }
+
+  async function handleLeave() {
+  if (!confirm("Leave this event? You'll be removed from the attendee list, and this will disappear from your Venndra events and personal calendar.")) return;
+  setActionLoading("leave");
+  setActionError(null);
+  const res = await fetch(`/api/events/${event.id}/leave`, { method: "POST" });
+  setActionLoading(null);
+  if (res.ok) {
+    router.refresh();
+  } else {
+    const body = await res.json().catch(() => null);
+    setActionError(typeof body?.error === "string" ? body.error : "Couldn't leave this event.");
+  }
+}
 
   function handleEdit() {
     // Deliberately doesn't cancel the original here -- that only happens
@@ -210,6 +224,15 @@ export default function EventChip({ event }: { event: EventChipData }) {
                     {actionLoading === "cancel" ? "Cancelling…" : "Cancel this search"}
                   </button>
                 )}
+                {!event.isOrganizer && (
+                  <button
+                    onClick={handleLeave}
+                    disabled={actionLoading !== null}
+                    className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+                  >
+                    {actionLoading === "leave" ? "Leaving…" : "Leave this event"}
+                  </button>
+                )}
               </div>
             )}
 
@@ -228,6 +251,17 @@ export default function EventChip({ event }: { event: EventChipData }) {
                   className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
                 >
                   {actionLoading === "cancel" ? "Cancelling…" : "Cancel event"}
+                </button>
+              </div>
+            )}
+            {!event.isOrganizer && event.status === "CONFIRMED" && !event.isPast && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={handleLeave}
+                  disabled={actionLoading !== null}
+                  className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+                >
+                  {actionLoading === "leave" ? "Leaving…" : "Leave this event"}
                 </button>
               </div>
             )}

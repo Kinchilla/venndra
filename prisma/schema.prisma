@@ -56,6 +56,12 @@ model User {
 
   timezone String @default("America/Denver")
 
+  // Personal default day/time windows for new event searches -- same shape
+  // as Event.filters / SavedGroup.defaultFilters. Null means "no personal
+  // default set," which falls back to FiltersBuilder's own hardcoded
+  // default (Mon-Fri 18:00-22:00) rather than to an empty object.
+  defaultSearchFilters Json?
+
   accounts           Account[]
   sessions           Session[]
   connectedCalendars ConnectedCalendar[]

@@ -4,9 +4,16 @@ import { z } from "zod";
 import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 
+// Same shape as Event.filters / SavedGroup.defaultFilters -- day-key ->
+// array of [start, end] time-of-day windows. `null` is a meaningful,
+// explicit value here (not just "field omitted") -- it's how the Settings
+// page's "Reset to app default" button clears a previously saved default.
+const weeklyHoursSchema = z.record(z.array(z.tuple([z.string(), z.string()])));
+
 const schema = z.object({
   name: z.string().min(1).max(80).optional(),
   timezone: z.string().min(1).optional(),
+  defaultSearchFilters: weeklyHoursSchema.nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -21,5 +28,12 @@ export async function PATCH(req: NextRequest) {
     data: parsed.data,
   });
 
-  return NextResponse.json({ user: { name: user.name, timezone: user.timezone, image: user.image } });
+  return NextResponse.json({
+    user: {
+      name: user.name,
+      timezone: user.timezone,
+      image: user.image,
+      defaultSearchFilters: user.defaultSearchFilters,
+    },
+  });
 }

@@ -4,6 +4,8 @@ import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import BackButton from "../../components/BackButton";
 import ProfileForm from "../../components/ProfileForm";
+import DefaultSearchTimesForm from "../../components/DefaultSearchTimesForm";
+import { WeeklyHours } from "../../components/FiltersBuilder";
 import CalendarSourcesPanel from "../../components/CalendarSourcesPanel";
 import ConnectAppleForm from "../../components/ConnectAppleForm";
 import LogoutButton from "../../components/LogoutButton";
@@ -28,6 +30,16 @@ export default async function SettingsPage() {
         <h2 className="font-display text-lg font-semibold">Profile</h2>
         <div className="mt-3">
           <ProfileForm initialName={user.name ?? ""} initialTimezone={user.timezone} image={user.image} />
+        </div>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="font-display text-lg font-semibold">Default search times</h2>
+        <p className="mt-1 text-sm text-ink/50">
+          Set your own default for the "Only look at" filter on new searches, instead of the app's built-in default (Mon–Fri, 6–10pm). Starting a search from a saved group still overrides this, same as today.
+        </p>
+        <div className="mt-3">
+          <DefaultSearchTimesForm initialFilters={(user.defaultSearchFilters as WeeklyHours | null) ?? null} />
         </div>
       </section>
 
