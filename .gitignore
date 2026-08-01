@@ -12,6 +12,15 @@
 .env
 .env*.local
 
+# shell history (never intentional)
+.bash_history
+
+# local git config (not project config)
+.gitconfig
+
+# Sublime workspace (personal, not project) — keep .sublime-project
+*.sublime-workspace
+
 # misc
 .DS_Store
 *.pem
