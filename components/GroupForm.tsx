@@ -28,6 +28,8 @@ export default function GroupForm({
   const [deleting, setDeleting] = useState(false);
   const [pickerHasPendingText, setPickerHasPendingText] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [filtersVersion, setFiltersVersion] = useState(0);
 
   // Same "default to including yourself, but only once" pattern as the
   // new-event form -- and only for a brand-new group, never when editing
@@ -77,9 +79,30 @@ export default function GroupForm({
       setError("Couldn't save that group.");
       return;
     }
-    router.push("/events");
+
+    if (isEditing) {
+      router.push("/groups");
+      router.refresh();
+      return;
+    }
+
+    // Creating: stay on the page and clear the form instead of navigating
+    // away, so several groups can be saved back-to-back. Still refresh --
+    // otherwise a cached /groups Router Cache entry from before this group
+    // existed gets served if the user hits Back instead of the nav link.
+    setName("");
+    setEmails(session?.user?.email ? [session.user.email] : []);
+    setFilters({});
+    setFiltersVersion((v) => v + 1);
+    setSaved(true);
     router.refresh();
   }
+
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(false), 2500);
+    return () => clearTimeout(t);
+  }, [saved]);
 
   async function handleDelete() {
     if (!groupId) return;
@@ -88,7 +111,7 @@ export default function GroupForm({
     const res = await fetch(`/api/groups/${groupId}`, { method: "DELETE" });
     setDeleting(false);
     if (res.ok) {
-      router.push("/events");
+      router.push("/groups");
       router.refresh();
     }
   }
@@ -118,10 +141,11 @@ export default function GroupForm({
 
       <div className="text-sm">
         <span className="mb-1 block text-ink/60">Default search windows (optional)</span>
-        <FiltersBuilder initial={initialFilters} onChange={setFilters} />
+        <FiltersBuilder key={filtersVersion} initial={initialFilters} onChange={setFilters} />
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {saved && <p className="text-sm text-teal">Saved!</p>}
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={submitting || pickerHasPendingText} className="w-fit rounded-full bg-amber px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">

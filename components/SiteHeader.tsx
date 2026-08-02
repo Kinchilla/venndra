@@ -41,6 +41,14 @@ export default async function SiteHeader() {
                   { label: "Friends list", href: "/friends" },
                 ]}
               />
+              <NavDropdown
+                label="Groups"
+                href="/groups"
+                items={[
+                  { label: "New group", href: "/groups/new" },
+                  { label: "Saved groups", href: "/groups" },
+                ]}
+              />
             </>
           )}
 
