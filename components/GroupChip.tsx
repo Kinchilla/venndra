@@ -60,31 +60,33 @@ export default function GroupChip({
       <div className="accordion" data-open={expanded}>
         <div className="accordion-inner">
           <div className="border-t border-line/60 px-4 py-3 text-sm">
-            <div className="grid gap-2">
-              {members.map((m) => (
-                <div key={m.email} className="flex items-center gap-2.5">
-                  {m.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.image} alt="" referrerPolicy="no-referrer" className="h-6 w-6 rounded-full" />
-                  ) : (
-                    <span className="h-6 w-6 shrink-0 rounded-full bg-line" />
-                  )}
-                  <span className="text-ink/70">{m.name ?? m.email}</span>
-                </div>
-              ))}
-            </div>
+            <div className="sm:flex sm:items-start sm:gap-6">
+              <div className="grid gap-2 sm:flex-1">
+                {members.map((m) => (
+                  <div key={m.email} className="flex items-center gap-2.5">
+                    {m.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.image} alt="" referrerPolicy="no-referrer" className="h-6 w-6 rounded-full" />
+                    ) : (
+                      <span className="h-6 w-6 shrink-0 rounded-full bg-line" />
+                    )}
+                    <span className="text-ink/70">{m.name ?? m.email}</span>
+                  </div>
+                ))}
+              </div>
 
-            <div className="mt-3">
-              <span className="text-ink/50">Default search windows: </span>
-              {dayLines.length === 0 ? (
-                <span className="text-ink/70">Any day, any time</span>
-              ) : (
-                <div className="mt-1 grid gap-0.5 text-ink/70">
-                  {dayLines.map((line) => (
-                    <span key={line}>{line}</span>
-                  ))}
-                </div>
-              )}
+              <div className="mt-3 sm:mt-0 sm:w-56 sm:shrink-0">
+                <span className="text-ink/50">Default search windows: </span>
+                {dayLines.length === 0 ? (
+                  <span className="text-ink/70">Any day, any time</span>
+                ) : (
+                  <div className="mt-1 grid gap-0.5 text-ink/70">
+                    {dayLines.map((line) => (
+                      <span key={line}>{line}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
