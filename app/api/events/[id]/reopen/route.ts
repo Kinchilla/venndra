@@ -4,6 +4,7 @@ import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { deleteGoogleEvent } from "../../../../../lib/calendar/google";
 import { deleteMicrosoftEvent } from "../../../../../lib/calendar/microsoft";
+import { deleteAppleEvent } from "../../../../../lib/calendar/apple";
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -41,6 +42,11 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         writeSource.connectedCalendar.nextAuthAccountId
       ) {
         await deleteMicrosoftEvent(writeSource.connectedCalendar.nextAuthAccountId, event.externalEventId);
+      } else if (writeSource?.connectedCalendar.provider === "APPLE_CALDAV" && event.externalEventHref) {
+        await deleteAppleEvent(writeSource.connectedCalendar.id, {
+          href: event.externalEventHref,
+          etag: event.externalEventEtag,
+        });
       }
     } catch (err) {
       // If it was already removed by hand, don't block reopening the
@@ -51,7 +57,9 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   // Clear externalEventId/writeCalendarSourceId too -- since the old
   // calendar event is gone, the next confirm should CREATE a fresh one,
-  // not try to patch a now-deleted event that no longer exists.
+  // not try to patch a now-deleted event that no longer exists. Also clear
+  // the Apple-only href/etag and any stale writeError, since they're all
+  // tied to the now-deleted upstream event.
   const updated = await prisma.event.update({
     where: { id: event.id },
     data: {
@@ -59,6 +67,9 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       confirmedStart: null,
       confirmedEnd: null,
       externalEventId: null,
+      externalEventHref: null,
+      externalEventEtag: null,
+      writeError: null,
       writeCalendarSourceId: null,
     },
   });

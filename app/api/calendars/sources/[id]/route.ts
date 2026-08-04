@@ -26,12 +26,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   if (parsed.data.isWriteTarget === true) {
-    if (source.connectedCalendar.provider === "APPLE_CALDAV") {
-      return NextResponse.json(
-        { error: "iCloud calendars can't be a write target yet -- Apple write-back isn't supported (see README)" },
-        { status: 400 }
-      );
-    }
     // Exactly one write target across the user's ENTIRE set of connected
     // calendars, not just within this account. These two writes run as a
     // single atomic transaction -- doing them as two separately-awaited
@@ -40,12 +34,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // "helpfully" auto-assign the primary calendar back, silently
     // clobbering the user's actual selection. This is very likely what
     // happened to the friend who reported this.
+    //
+    // writeTargetAutoAssigned is explicitly forced false here -- this is a
+    // real user choice, not an auto-assignment, so populateCalendarSources'
+    // "prefer non-Apple" auto-switch rule must never later treat it as
+    // something safe to silently override.
     await prisma.$transaction([
       prisma.calendarSource.updateMany({
         where: { connectedCalendar: { userId } },
-        data: { isWriteTarget: false },
+        data: { isWriteTarget: false, writeTargetAutoAssigned: false },
       }),
-      prisma.calendarSource.update({ where: { id: source.id }, data: { isWriteTarget: true } }),
+      prisma.calendarSource.update({
+        where: { id: source.id },
+        data: { isWriteTarget: true, writeTargetAutoAssigned: false },
+      }),
     ]);
   }
 

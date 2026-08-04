@@ -6,8 +6,7 @@ import BackButton from "../../components/BackButton";
 import ProfileForm from "../../components/ProfileForm";
 import DefaultSearchTimesForm from "../../components/DefaultSearchTimesForm";
 import { WeeklyHours } from "../../components/FiltersBuilder";
-import CalendarSourcesPanel from "../../components/CalendarSourcesPanel";
-import ConnectAppleForm from "../../components/ConnectAppleForm";
+import ConnectedCalendarsSection from "../../components/ConnectedCalendarsSection";
 import LogoutButton from "../../components/LogoutButton";
 
 export default async function SettingsPage() {
@@ -48,12 +47,7 @@ export default async function SettingsPage() {
         <p className="mt-1 text-sm text-ink/50">
           Pick which calendars count toward your availability, and which one new events get added to.
         </p>
-        <div className="mt-3">
-          <CalendarSourcesPanel />
-        </div>
-        <div className="mt-3">
-          <ConnectAppleForm />
-        </div>
+        <ConnectedCalendarsSection />
       </section>
     </main>
   );

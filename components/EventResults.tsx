@@ -33,6 +33,9 @@ export default function EventResults({
   confirmedStart,
   confirmedEnd,
   votingEnabled,
+  writeCalendarProvider,
+  organizerName,
+  writeError,
 }: {
   eventId: string;
   isCreator: boolean;
@@ -40,6 +43,9 @@ export default function EventResults({
   confirmedStart: string | null;
   confirmedEnd: string | null;
   votingEnabled: boolean;
+  writeCalendarProvider: string | null;
+  organizerName: string;
+  writeError: string | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
@@ -214,7 +220,13 @@ export default function EventResults({
   }
 
   async function handleCancel() {
-    if (!confirm("Cancel this event? If it's already confirmed, everyone gets a cancellation notice on their calendar.")) return;
+    // Same reasoning as the "Locked in" Apple note above -- no real invites
+    // went out, so there's no cancellation notice for other attendees either.
+    const cancelConfirmText =
+      status === "CONFIRMED" && writeCalendarProvider === "APPLE_CALDAV"
+        ? "Cancel this event? It'll be removed from the organizer's Apple Calendar, but since iCloud doesn't support automatic invites, other attendees won't get a cancellation notice."
+        : "Cancel this event? If it's already confirmed, everyone gets a cancellation notice on their calendar.";
+    if (!confirm(cancelConfirmText)) return;
     setActionLoading("cancel");
     const res = await fetch(`/api/events/${eventId}/cancel`, { method: "POST" });
     setActionLoading(null);
@@ -255,7 +267,13 @@ export default function EventResults({
           {" – "}
           {formatTime(end, timeFormat)}
         </p>
-        <p className="mt-1 text-sm text-ink/50">A calendar invite is on its way to everyone.</p>
+        <p className="mt-1 text-sm text-ink/50">
+          {writeCalendarProvider === "APPLE_CALDAV"
+            ? `This was added to ${organizerName}'s Apple Calendar. Apple doesn't support automatic invites through Venndra yet — ${organizerName} will need to invite everyone manually.`
+            : "A calendar invite is on its way to everyone."}
+        </p>
+
+        {writeError && isCreator && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{writeError}</p>}
 
         {isCreator && (
           <div className="mt-4 flex gap-3 border-t border-teal/20 pt-4">

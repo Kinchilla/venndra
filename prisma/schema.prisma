@@ -120,6 +120,14 @@ model CalendarSource {
   checkAvailability Boolean @default(true) // does this calendar's busy time count against the user?
   isWriteTarget     Boolean @default(false) // is this THE calendar new confirmed events get created on?
 
+  // True only when populateCalendarSources chose this automatically as the
+  // write target; false the instant a user explicitly picks one via
+  // PATCH /api/calendars/sources/[id]. Lets populateCalendarSources safely
+  // auto-switch away from an auto-assigned Apple write target once a real
+  // write-capable (Google/Microsoft) calendar connects, without ever
+  // silently overriding a choice the user actually made themselves.
+  writeTargetAutoAssigned Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   @@unique([connectedCalendarId, externalId])
@@ -178,6 +186,20 @@ model Event {
   confirmedStart  DateTime?
   confirmedEnd    DateTime?
   externalEventId String? // id of the event created on the calendar below, once confirmed
+
+  // Apple/iCloud-only: CalDAV has no opaque provider-assigned event id like
+  // Google/Microsoft, so writes need the full resource URL (for subsequent
+  // GET/PUT/DELETE) and the last-known ETag (for conditional If-Match
+  // writes, so a stale local copy can't silently clobber a concurrent
+  // external edit). Both null for Google/Microsoft events.
+  externalEventHref String?
+  externalEventEtag String?
+
+  // Set when an async upstream calendar write (e.g. a leave-triggered
+  // Apple description update) fails even after a retry; cleared on the
+  // next successful write to this event. Shown as a banner on next page
+  // load -- there's no push-notification system to surface it proactively.
+  writeError String?
 
   // Which specific calendar the confirmed event was actually written to,
   // captured at confirm time. Rescheduling/cancelling always target this

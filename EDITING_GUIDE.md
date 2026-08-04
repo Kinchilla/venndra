@@ -218,7 +218,9 @@ kept current as things get built or new ideas come up, rather than
 duplicated here where it could quietly drift out of sync.
 
 A couple of things worth knowing right in this file, since they affect
-how you work day to day: Apple/iCloud calendars are still read-only (can
-contribute to availability, but can never receive the actual confirmed
-event), and there's still no custom invite-notification email — invites
-currently ride entirely on the calendar provider's own notification.
+how you work day to day: Apple/iCloud calendars can now receive a
+confirmed event too, but only onto the organizer's own calendar with no
+real invites sent (the organizer has to invite people manually -- see
+README's "Known limitations"), and there's still no custom
+invite-notification email for Google/Microsoft — those invites currently
+ride entirely on the calendar provider's own notification.

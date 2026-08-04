@@ -146,7 +146,7 @@ lib/
   participants.ts                    promotes an invited participant to CONNECTED once they have a calendar
   calendar/google.ts                 Google: per-calendar, per-event status/tentative read + event creation
   calendar/microsoft.ts              Microsoft Graph: calendarView per calendar (free/tentative/busy natively) + event creation
-  calendar/apple.ts                  CalDAV read per calendar (tentative via VEVENT STATUS), no write-back yet
+  calendar/apple.ts                  CalDAV read per calendar (tentative via VEVENT STATUS) + write-back (own calendar only, no real invites -- see limitations)
   crypto.ts                          encrypts the Apple app-specific password at rest
 prisma/schema.prisma                  data model
 ```
@@ -172,7 +172,8 @@ toggling a checkbox reuse the cached list (`GET /api/calendars`, no
 - **`isWriteTarget`** (default `false`, exactly one `true` across the
   user's *entire* set of connected calendars, not per-account) — which
   calendar new confirmed events get created on. Apple/iCloud calendars can
-  never be a write target (see limitations below).
+  be a write target too, but with a real limitation: no automatic invites
+  (see limitations below).
 
 When an event is confirmed, the specific `CalendarSource` used is recorded
 on the `Event` itself (`writeCalendarSourceId`) — rescheduling or
@@ -196,11 +197,17 @@ chronological.
 
 ## Known limitations (this is a starter, not a finished product)
 
-- **No Apple event write-back.** iCloud calendars can be an availability
-  source (any of them, individually toggleable) but can never be the write
-  target — the organizer needs a Google or Microsoft calendar connected to
-  confirm a slot. Adding CalDAV `PUT` support in `lib/calendar/apple.ts`
-  is the natural next step.
+- **Apple event write-back has no real invites.** iCloud calendars can now
+  be the write target, but Apple's CalDAV endpoint is the only third-party
+  integration point Apple offers -- there's no reliable way to know whether
+  a third-party `PUT`-ed `VEVENT` with `ATTENDEE` properties actually
+  triggers real iCloud invitation emails, so this doesn't attempt it.
+  Confirming a slot with Apple as the write target puts the event on the
+  organizer's own Apple calendar only (with participants listed by name in
+  the description, for reference), and the UI tells everyone the organizer
+  needs to invite people manually. Real iTIP-based attendee scheduling
+  would need Venndra to send its own ICS invite emails directly, bypassing
+  iCloud's scheduling engine entirely -- a bigger, separate piece of work.
 - **Invites ride on the calendar provider's own invite email**, not a
   custom Venndra notification — there's no in-app "hey, you've been
   invited to a search" email yet. Deliberately deferred: the plan is to

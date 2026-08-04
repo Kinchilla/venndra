@@ -2,10 +2,25 @@
 
 import { useRouter } from "next/navigation";
 
-export default function BackButton({ fallbackHref = "/events" }: { fallbackHref?: string }) {
+export default function BackButton({
+  fallbackHref = "/events",
+  href,
+}: {
+  fallbackHref?: string;
+  // When set, this button navigates straight there instead of doing a real
+  // history-back -- used specifically for "Back" off a just-created,
+  // still-SEARCHING event, which should behave like "Edit this search"
+  // (redo the same search and cancel this one on resubmit) rather than a
+  // generic back navigation.
+  href?: string;
+}) {
   const router = useRouter();
 
   function handleClick() {
+    if (href) {
+      router.push(href);
+      return;
+    }
     // history.length > 1 means there's at least one prior page in this tab's
     // session -- not a perfect signal (it also counts entries from outside
     // the app), but good enough to avoid stranding someone who opened a

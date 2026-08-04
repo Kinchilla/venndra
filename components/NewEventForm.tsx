@@ -13,6 +13,12 @@ import BackButton from "./BackButton";
 
 type SavedGroup = { id: string; name: string; emails: string[]; defaultFilters: WeeklyHours | null };
 
+// sessionStorage (not localStorage) -- a draft should survive navigating
+// away and back within the same tab (e.g. clicking Back to retry), but not
+// linger indefinitely across separate visits/tabs. Cleared on successful
+// submit, in handleSubmit below.
+const DRAFT_STORAGE_KEY = "venndra-new-event-draft";
+
 function localDateString(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -130,6 +136,75 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, prefilledFromEvent]);
 
+  // Restores whatever was last typed if this page is revisited within the
+  // same tab (e.g. clicking Back after submitting, to retry) -- but only
+  // when there's no fromEvent prefill in progress, since that's a more
+  // specific, authoritative source for the same fields and should win.
+  useEffect(() => {
+    if (searchParams.get("fromEvent")) return;
+    const raw = typeof window !== "undefined" ? sessionStorage.getItem(DRAFT_STORAGE_KEY) : null;
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw);
+      if (typeof draft.title === "string") setTitle(draft.title);
+      if (typeof draft.description === "string") setDescription(draft.description);
+      if (typeof draft.location === "string") setLocation(draft.location);
+      if (typeof draft.durationHours === "number") durationHoursField.setValue(draft.durationHours);
+      if (typeof draft.durationMinutes === "number") durationMinutesField.setValue(draft.durationMinutes);
+      if (typeof draft.startDate === "string") setStartDate(draft.startDate);
+      if (typeof draft.endDate === "string") setEndDate(draft.endDate);
+      if (draft.filters) setFiltersFromExternalSource(draft.filters);
+      if (typeof draft.useThreshold === "boolean") setUseThreshold(draft.useThreshold);
+      if (typeof draft.minAttendees === "number") minAttendeesField.setValue(draft.minAttendees);
+      if (typeof draft.votingEnabled === "boolean") setVotingEnabled(draft.votingEnabled);
+      if (typeof draft.voteTopX === "number") voteTopXField.setValue(draft.voteTopX);
+      if (Array.isArray(draft.emails)) {
+        setEmails(draft.emails);
+        setSelfPrefilled(true); // already includes self if it did when saved -- don't re-prepend
+      }
+    } catch {
+      // Corrupt/unreadable draft -- ignore it rather than blocking the page.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persists the current form state on every change, so it survives
+  // navigating away and back within the tab. Cheap enough to run on every
+  // keystroke -- sessionStorage writes are synchronous and local.
+  useEffect(() => {
+    const draft = {
+      title,
+      description,
+      location,
+      durationHours: durationHoursField.numericValue,
+      durationMinutes: durationMinutesField.numericValue,
+      startDate,
+      endDate,
+      filters,
+      useThreshold,
+      minAttendees: minAttendeesField.numericValue,
+      votingEnabled,
+      voteTopX: voteTopXField.numericValue,
+      emails,
+    };
+    sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    title,
+    description,
+    location,
+    durationHoursField.numericValue,
+    durationMinutesField.numericValue,
+    startDate,
+    endDate,
+    filters,
+    useThreshold,
+    minAttendeesField.numericValue,
+    votingEnabled,
+    voteTopXField.numericValue,
+    emails,
+  ]);
+
   const [cachedCurrentUser, setCachedCurrentUser] = useState<{ email: string; name: string | null; image: string | null } | null>(null);
   useEffect(() => {
     if (session?.user?.email) {
@@ -187,8 +262,13 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
       }),
     });
 
-    setSubmitting(false);
     if (!res.ok) {
+      // Only reset the button on failure -- on success, leave it showing
+      // "Searching…" right up until the redirect actually happens, rather
+      // than flashing back to "Start the search" for the gap between this
+      // await resolving and router.push completing (which briefly looked
+      // like the search had failed).
+      setSubmitting(false);
       setError("Couldn't create that search — check the fields above.");
       return;
     }
@@ -199,7 +279,13 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
       fetch(`/api/events/${fromEventId}/cancel`, { method: "POST" }).catch(() => {});
     }
 
-    router.push(`/events/${event.id}`);
+    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    // justCreated=1 lets /events/[id] know this event was just created by
+    // this exact submission, so its Back button can offer "redo this search
+    // and cancel it" (same as Edit this search) instead of a generic back
+    // navigation -- otherwise hitting Back and resubmitting leaves a
+    // duplicate event behind rather than looking like a single edit.
+    router.push(`/events/${event.id}?justCreated=1`);
   }
 
   return (

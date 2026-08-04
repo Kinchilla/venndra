@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function ConnectAppleForm() {
+export default function ConnectAppleForm({ onConnected }: { onConnected?: () => void }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [appleId, setAppleId] = useState("");
@@ -31,6 +31,7 @@ export default function ConnectAppleForm() {
     setAppleId("");
     setPassword("");
     router.refresh();
+    onConnected?.();
   }
 
   if (!open) {
@@ -47,12 +48,27 @@ export default function ConnectAppleForm() {
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-line bg-white p-5">
       <p className="text-sm text-ink/70">
-        Apple doesn't support one-click sign-in for third-party apps like this — you'll need an{" "}
+        Apple doesn't support one-click sign-in for third-party apps like this. You'll need an{" "}
         <a href="https://support.apple.com/en-us/102654" target="_blank" rel="noreferrer" className="underline">
           app-specific password
-        </a>{" "}
-        from appleid.apple.com. It only grants calendar access, and you can revoke it anytime. Note: iCloud can be
-        used to check your availability, but can't yet be the calendar new events get written to.
+        </a>
+        {" "}— <strong>this is not your regular Apple ID / iCloud password</strong>, and Apple won't accept your
+        regular password here even if you try.
+      </p>
+      <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-sm text-ink/70">
+        <li>
+          Sign in at{" "}
+          <a href="https://appleid.apple.com" target="_blank" rel="noreferrer" className="underline">
+            appleid.apple.com
+          </a>
+        </li>
+        <li>Go to "Sign-In and Security" → "App-Specific Passwords"</li>
+        <li>Generate one (any label works, e.g. "Venndra") and paste it below</li>
+      </ol>
+      <p className="mt-2 text-sm text-ink/70">
+        It only grants calendar access, and you can revoke it anytime from the same page. Note: confirmed events can
+        be written to an iCloud calendar, but iCloud can't send real invites to other attendees — you'll need to
+        invite them yourself.
       </p>
       <div className="mt-4 grid gap-3">
         <input
@@ -65,10 +81,10 @@ export default function ConnectAppleForm() {
         />
         <input
           type="password"
-          placeholder="app-specific password"
+          placeholder="app-specific password (not your Apple ID password)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-lg border border-line px-3 py-2 text-sm font-mono-tight"
+          className="rounded-lg border border-line px-3 py-2 text-sm"
           required
         />
       </div>

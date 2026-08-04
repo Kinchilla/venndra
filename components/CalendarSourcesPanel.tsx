@@ -113,10 +113,16 @@ export default function CalendarSourcesPanel() {
                   type="radio"
                   name="writeTarget"
                   checked={source.isWriteTarget}
-                  disabled={account.provider === "APPLE_CALDAV"}
                   onChange={() => setWriteTarget(source.id)}
-                  title={account.provider === "APPLE_CALDAV" ? "iCloud calendars can't be a write target yet" : undefined}
+                  title={
+                    account.provider === "APPLE_CALDAV"
+                      ? "Events confirmed here won't send real invites to other attendees -- you'll need to invite them yourself"
+                      : undefined
+                  }
                 />
+                {account.provider === "APPLE_CALDAV" && (
+                  <div className="mt-0.5 text-[10px] leading-tight text-ink/40">No auto-invites</div>
+                )}
               </td>
             </tr>
           ))}
@@ -126,6 +132,12 @@ export default function CalendarSourcesPanel() {
         Unchecked calendars are ignored when Venndra checks your availability — handy for things like a shared
         "US Holidays" calendar that shouldn't block a hangout.
       </p>
+      {rows.some((r) => r.account.provider === "APPLE_CALDAV") && (
+        <p className="mt-1.5 text-xs text-ink/40">
+          Events confirmed through your Apple Calendar won't send real invites to other attendees — you'll need to
+          invite them yourself.
+        </p>
+      )}
     </div>
   );
 }

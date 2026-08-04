@@ -5,6 +5,7 @@ import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { createGoogleEvent, updateGoogleEventTime } from "../../../../../lib/calendar/google";
 import { createMicrosoftEvent, updateMicrosoftEventTime } from "../../../../../lib/calendar/microsoft";
+import { createAppleEvent, updateAppleEventTime } from "../../../../../lib/calendar/apple";
 
 const confirmSchema = z.object({ start: z.string().datetime() });
 
@@ -15,7 +16,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const parsed = confirmSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const event = await prisma.event.findUnique({ where: { id: params.id }, include: { participants: true } });
+  const event = await prisma.event.findUnique({
+    where: { id: params.id },
+    include: { participants: { include: { user: { select: { name: true } } } } },
+  });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const userId = (session.user as any).id;
@@ -56,6 +60,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .filter((email) => email !== session.user!.email);
 
   let externalEventId: string | undefined = event.externalEventId ?? undefined;
+  let externalEventHref: string | undefined = event.externalEventHref ?? undefined;
+  let externalEventEtag: string | null = event.externalEventEtag ?? null;
 
   if (connectedCalendar.provider === "GOOGLE" && connectedCalendar.nextAuthAccountId) {
     if (isReschedule) {
@@ -83,10 +89,49 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         attendeeEmails,
       });
     }
+  } else if (connectedCalendar.provider === "APPLE_CALDAV") {
+    // Apple has no separate "update time only" concept the way
+    // Google/Microsoft do -- a reschedule is a full re-PUT of the VEVENT.
+    // In practice this isReschedule branch won't be exercised for Apple in
+    // this app's normal flow: reopen/route.ts unconditionally deletes the
+    // upstream Apple event and nulls externalEventId/externalEventHref
+    // before handing back here, so a rescheduled Apple event always takes
+    // the create path below with a fresh UID. Kept for structural parity
+    // with Google/Microsoft and in case isReschedule is ever reached
+    // another way.
+    if (isReschedule) {
+      const result = await updateAppleEventTime(connectedCalendar.id, {
+        href: event.externalEventHref!,
+        etag: event.externalEventEtag,
+        start,
+        end,
+      });
+      externalEventEtag = result.externalEventEtag;
+    } else {
+      // Includes the organizer themselves, unlike Google/Microsoft's
+      // attendeeEmails above -- this is just a plain-text reference list
+      // in the DESCRIPTION, not a real attendee list, so there's no reason
+      // to exclude the organizer's own name from it.
+      const participantsForDescription = event.participants.map((p) => ({
+        email: p.email,
+        name: p.user?.name ?? null,
+      }));
+      const result = await createAppleEvent(connectedCalendar.id, writeSource.externalId, {
+        title: event.title,
+        description: event.description ?? undefined,
+        location: event.location ?? undefined,
+        start,
+        end,
+        participants: participantsForDescription,
+      });
+      externalEventId = result.externalEventId;
+      externalEventHref = result.externalEventHref;
+      externalEventEtag = result.externalEventEtag;
+    }
   } else {
-    // Apple/iCloud can't be the write target yet (see README) -- this
-    // shouldn't happen since Apple sources are never marked isWriteTarget,
-    // but guard against it anyway.
+    // Shouldn't happen -- every provider that can be a write target is
+    // handled above; guard against a future provider being added to
+    // CalendarProvider without a matching branch here.
     return NextResponse.json({ error: "That calendar type doesn't support creating events yet" }, { status: 400 });
   }
 
@@ -97,6 +142,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       confirmedStart: start,
       confirmedEnd: end,
       externalEventId,
+      externalEventHref,
+      externalEventEtag,
+      writeError: null,
       writeCalendarSourceId: writeSource.id,
     },
   });

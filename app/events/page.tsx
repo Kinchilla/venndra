@@ -17,6 +17,18 @@ export default async function EventsPage() {
     orderBy: { createdAt: "desc" },
   });
 
+  // writeCalendarSourceId is deliberately a loose id, not a Prisma relation
+  // (see app/events/[id]/page.tsx for why) -- batch-look-up the provider
+  // for every referenced write target in one query rather than one per event.
+  const writeSourceIds = [...new Set(events.map((e) => e.writeCalendarSourceId).filter((id): id is string => !!id))];
+  const writeSources = writeSourceIds.length
+    ? await prisma.calendarSource.findMany({
+        where: { id: { in: writeSourceIds } },
+        select: { id: true, connectedCalendar: { select: { provider: true } } },
+      })
+    : [];
+  const writeProviderBySourceId = new Map(writeSources.map((s) => [s.id, s.connectedCalendar.provider]));
+
   const now = new Date();
   const isPast = (e: any) => e.confirmedEnd !== null && e.confirmedEnd < now;
 
@@ -35,15 +47,35 @@ export default async function EventsPage() {
         </Link>
       </div>
 
-      <EventSection title="Confirmed" events={confirmed} userId={userId} isPast={isPast} />
-      <EventSection title="Still deciding" events={inProgress} userId={userId} isPast={isPast} />
-      {past.length > 0 && <EventSection title="Past" events={past} userId={userId} isPast={isPast} muted showClear />}
-      {cancelled.length > 0 && <EventSection title="Cancelled" events={cancelled} userId={userId} isPast={isPast} muted showClear />}
+      <EventSection title="Confirmed" events={confirmed} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} />
+      <EventSection title="Still deciding" events={inProgress} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} />
+      {past.length > 0 && (
+        <EventSection title="Past" events={past} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} muted showClear />
+      )}
+      {cancelled.length > 0 && (
+        <EventSection title="Cancelled" events={cancelled} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} muted showClear />
+      )}
     </main>
   );
 }
 
-function EventSection({ title, events, userId, isPast, muted = false, showClear = false }: { title: string; events: any[]; userId: string; isPast: (e: any) => boolean; muted?: boolean; showClear?: boolean }) {
+function EventSection({
+  title,
+  events,
+  userId,
+  isPast,
+  writeProviderBySourceId,
+  muted = false,
+  showClear = false,
+}: {
+  title: string;
+  events: any[];
+  userId: string;
+  isPast: (e: any) => boolean;
+  writeProviderBySourceId: Map<string, string>;
+  muted?: boolean;
+  showClear?: boolean;
+}) {
   const myEventIds = events.filter((e) => e.creatorId === userId).map((e) => e.id);
 
   return (
@@ -71,6 +103,8 @@ function EventSection({ title, events, userId, isPast, muted = false, showClear 
                 minAttendees: e.minAttendees,
                 confirmedStart: e.confirmedStart?.toISOString() ?? null,
                 confirmedEnd: e.confirmedEnd?.toISOString() ?? null,
+                writeCalendarProvider: e.writeCalendarSourceId ? writeProviderBySourceId.get(e.writeCalendarSourceId) ?? null : null,
+                writeError: e.writeError,
               }}
             />
           </div>

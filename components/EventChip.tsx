@@ -20,6 +20,8 @@ type EventChipData = {
   minAttendees: number | null;
   confirmedStart: string | null;
   confirmedEnd: string | null;
+  writeCalendarProvider: string | null;
+  writeError: string | null;
 };
 
 const DAY_LABELS: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
@@ -77,7 +79,14 @@ export default function EventChip({ event }: { event: EventChipData }) {
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function handleCancel() {
-    if (!confirm("Cancel this event? If it's already confirmed, everyone gets a cancellation notice on their calendar.")) return;
+    // Apple write-back never sends real invites, so there's no cancellation
+    // notice to send either -- it's only ever removed from the organizer's
+    // own Apple calendar. Same reasoning as the leave-confirmation text above.
+    const cancelConfirmText =
+      event.status === "CONFIRMED" && event.writeCalendarProvider === "APPLE_CALDAV"
+        ? "Cancel this event? It'll be removed from the organizer's Apple Calendar, but since iCloud doesn't support automatic invites, other attendees won't get a cancellation notice."
+        : "Cancel this event? If it's already confirmed, everyone gets a cancellation notice on their calendar.";
+    if (!confirm(cancelConfirmText)) return;
     setActionLoading("cancel");
     setActionError(null);
     const res = await fetch(`/api/events/${event.id}/cancel`, { method: "POST" });
@@ -91,7 +100,17 @@ export default function EventChip({ event }: { event: EventChipData }) {
   }
 
   async function handleLeave() {
-  if (!confirm("Leave this event? You'll be removed from the attendee list, and this will disappear from your Venndra events and personal calendar.")) return;
+  // Apple write-back never sends a real invite -- the organizer has to add
+  // people manually if they want to (see the manual-invite note elsewhere
+  // on this chip). So unlike Google/Microsoft, Venndra has no way to know
+  // or control whether this ever ended up on the leaving person's own
+  // calendar, and can't remove it either way -- the usual "will disappear
+  // from your personal calendar" claim would be misleading here.
+  const leaveConfirmText =
+    event.status === "CONFIRMED" && event.writeCalendarProvider === "APPLE_CALDAV"
+      ? "Leave this event? You'll be removed from the attendee list here in Venndra. If you added this event to your personal calendar, you may wish to delete that as well, since iCloud doesn't support automatic invite updates."
+      : "Leave this event? You'll be removed from the attendee list, and this will disappear from your Venndra events and personal calendar.";
+  if (!confirm(leaveConfirmText)) return;
   setActionLoading("leave");
   setActionError(null);
   const res = await fetch(`/api/events/${event.id}/leave`, { method: "POST" });
@@ -190,6 +209,16 @@ export default function EventChip({ event }: { event: EventChipData }) {
                 <span className="text-ink/50">Minimum: </span>
                 {event.minAttendees}+ people free
               </p>
+            )}
+            {event.status === "CONFIRMED" && event.writeCalendarProvider === "APPLE_CALDAV" && (
+              <p className="mt-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-ink/60">
+                {event.isOrganizer
+                  ? "You'll need to invite everyone to this manually — iCloud doesn't support automatic calendar invites through Venndra."
+                  : `${event.organizerName} needs to invite everyone to this manually — iCloud doesn't support automatic calendar invites through Venndra.`}
+              </p>
+            )}
+            {event.writeError && event.isOrganizer && (
+              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{event.writeError}</p>
             )}
             {event.isOrganizer && (event.status === "CANCELLED" || (event.status === "CONFIRMED" && event.isPast)) && (
               <button

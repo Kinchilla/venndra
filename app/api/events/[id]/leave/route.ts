@@ -4,6 +4,7 @@ import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { removeGoogleAttendee } from "../../../../../lib/calendar/google";
 import { removeMicrosoftAttendee } from "../../../../../lib/calendar/microsoft";
+import { buildAppleDescriptionText, updateAppleEventDescription } from "../../../../../lib/calendar/apple";
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -64,6 +65,39 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       // attendee is already gone somehow, don't block leaving in Venndra
       // over it.
       console.error("Failed to remove attendee from upstream calendar event during leave:", err);
+    }
+
+    // Apple has no ATTENDEE list to patch -- instead, re-PUT the event with
+    // an updated plain-text DESCRIPTION reflecting who's still attending.
+    if (writeSource?.connectedCalendar.provider === "APPLE_CALDAV" && event.externalEventHref) {
+      try {
+        const remaining = await prisma.eventParticipant.findMany({
+          where: { eventId: event.id, id: { not: participant.id } },
+          include: { user: { select: { name: true } } },
+        });
+        const description = buildAppleDescriptionText(
+          event.description,
+          remaining.map((p) => ({ email: p.email, name: p.user?.name ?? null }))
+        );
+        const result = await updateAppleEventDescription(writeSource.connectedCalendar.id, {
+          href: event.externalEventHref,
+          etag: event.externalEventEtag,
+          description,
+        });
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { externalEventEtag: result.externalEventEtag, writeError: null },
+        });
+      } catch (err) {
+        // Don't block leaving over this -- but unlike the Google/Microsoft
+        // case above, there's no provider-side notification if this silently
+        // fails, so record it for the organizer to notice on next page load.
+        console.error("Failed to update Apple calendar event description during leave:", err);
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { writeError: "Couldn't update your iCloud calendar event after someone left the event -- check it manually." },
+        });
+      }
     }
   }
 

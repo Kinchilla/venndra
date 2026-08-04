@@ -4,6 +4,7 @@ import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { deleteGoogleEvent } from "../../../../../lib/calendar/google";
 import { deleteMicrosoftEvent } from "../../../../../lib/calendar/microsoft";
+import { deleteAppleEvent } from "../../../../../lib/calendar/apple";
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -38,6 +39,11 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         writeSource.connectedCalendar.nextAuthAccountId
       ) {
         await deleteMicrosoftEvent(writeSource.connectedCalendar.nextAuthAccountId, event.externalEventId);
+      } else if (writeSource?.connectedCalendar.provider === "APPLE_CALDAV" && event.externalEventHref) {
+        await deleteAppleEvent(writeSource.connectedCalendar.id, {
+          href: event.externalEventHref,
+          etag: event.externalEventEtag,
+        });
       }
     } catch (err) {
       // If the calendar event was already deleted by hand (e.g. directly in
