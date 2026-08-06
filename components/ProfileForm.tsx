@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useClientValue } from "../hooks/useClientValue";
 
 export default function ProfileForm({
   initialName,
@@ -18,17 +19,32 @@ export default function ProfileForm({
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Modern browsers expose the full IANA timezone database via Intl --
-  // no need to hand-maintain a list. Falls back to just the current value
-  // if the browser doesn't support it (older Safari).
-  const timezones = useMemo(() => {
-    try {
-      // @ts-ignore -- supportedValuesOf isn't in older TS lib definitions yet
-      return Intl.supportedValuesOf("timeZone") as string[];
-    } catch {
-      return [timezone];
-    }
-  }, [timezone]);
+  // Modern browsers expose the full IANA timezone database via Intl -- no
+  // need to hand-maintain a list. Computed via useClientValue (client-only,
+  // after mount) rather than during render: Intl.supportedValuesOf reads
+  // whatever tzdata snapshot ships with the current runtime, and Node's
+  // server-side ICU version can genuinely disagree with the browser's own
+  // on the exact spelling of a legacy-alias zone (e.g. the server returning
+  // "Africa/Asmera" where the browser returns the now-canonical
+  // "Africa/Asmara" for the same zone) -- computing this during SSR and
+  // hydrating against a different browser-computed list crashes with a
+  // hydration mismatch. Falls back to just the current value pre-mount (and
+  // permanently, if the browser doesn't support supportedValuesOf at all --
+  // older Safari), so there's nothing for the server-rendered markup to
+  // disagree with in the first place.
+  const timezones = useClientValue<string[]>(
+    () => {
+      try {
+        // @ts-ignore -- supportedValuesOf isn't in older TS lib definitions yet
+        const all = Intl.supportedValuesOf("timeZone") as string[];
+        return all.includes(initialTimezone) ? all : [initialTimezone, ...all];
+      } catch {
+        return [initialTimezone]; // older Safari -- no supportedValuesOf at all
+      }
+    },
+    [initialTimezone],
+    [initialTimezone]
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -1,15 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useClientValue } from "../hooks/useClientValue";
 
-type Participant = { email: string };
+type Participant = {
+  email: string;
+  userId: string | null;
+  status: "INVITED" | "CONNECTED";
+  name: string | null;
+};
+type Candidate = {
+  userId: string | null;
+  name: string | null;
+  email: string;
+  eligible: boolean;
+  reason: "not-joined" | "no-write-target" | null;
+  provider: string | null;
+};
 type EventChipData = {
   id: string;
   title: string;
   organizerName: string;
   isOrganizer: boolean;
+  creatorId: string;
   isPast: boolean;
   status: string;
   participants: Participant[];
@@ -55,28 +70,27 @@ function formatFilters(filters: Record<string, [string, string][]>): string {
   return [...byWindow.entries()].map(([key, days]) => `${days.join(", ")}: ${key.replace("-", "–")}`).join(" · ");
 }
 
-// Renders `fallback` on the very first pass (both server and the client's
-// initial hydration render use this same fixed string, so nothing can
-// mismatch), then swaps to the real, locale-formatted result right after
-// mounting in the browser. Deliberately client-only rather than reading
-// the Accept-Language header server-side -- Brave (and possibly other
-// privacy-focused browsers) intentionally randomizes that header as a
-// fingerprinting defense, independent of what the browser's own real
-// Intl calls actually use, so the two can genuinely disagree.
-function useClientFormatted(compute: () => string, fallback: string): string {
-  const [value, setValue] = useState(fallback);
-  useEffect(() => {
-    setValue(compute());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return value;
-}
-
 export default function EventChip({ event }: { event: EventChipData }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
-  const [actionLoading, setActionLoading] = useState<"cancel" | "reopen" | "leave" | null>(null);
+  const [actionLoading, setActionLoading] = useState<"cancel" | "reopen" | "leave" | "loadCandidates" | "reassign" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [candidates, setCandidates] = useState<Candidate[] | null>(null);
+  // Separate from actionError -- lives and dies with the picker itself
+  // (rendered inside ReassignPicker, reset whenever the picker opens or
+  // closes) rather than in the chip's general error slot, which would
+  // otherwise keep a failed-handoff message visible even after collapsing
+  // the picker that caused it.
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  // Which candidate's "Hand off to them" button is mid-request -- lets the
+  // picker grey out only that one row rather than every row, even though
+  // every button in the picker is functionally inert while this is set.
+  const [reassigningUserId, setReassigningUserId] = useState<string | null>(null);
+
+  // Knowable instantly from the already-widened participants prop -- no
+  // need to hit reassign-candidates just to find out the event is solo.
+  const hasOtherParticipants = event.participants.some((p) => p.userId !== event.creatorId);
 
   async function handleCancel() {
     // Apple write-back never sends real invites, so there's no cancellation
@@ -123,6 +137,58 @@ export default function EventChip({ event }: { event: EventChipData }) {
   }
 }
 
+  // Doesn't touch pickerError itself -- callers decide what to show
+  // alongside the refreshed list (a load failure vs. a stale-row refresh
+  // after a failed hand-off shouldn't stomp on each other's messaging).
+  async function fetchCandidates(): Promise<boolean> {
+    setActionLoading("loadCandidates");
+    const res = await fetch(`/api/events/${event.id}/reassign-candidates`);
+    setActionLoading(null);
+    if (res.ok) {
+      const body = await res.json();
+      setCandidates(body.candidates ?? []);
+      return true;
+    }
+    return false;
+  }
+
+  async function handleOpenPicker() {
+    if (pickerOpen) {
+      setPickerOpen(false);
+      setCandidates(null);
+      setPickerError(null);
+      return;
+    }
+    setPickerOpen(true);
+    setPickerError(null);
+    const ok = await fetchCandidates();
+    if (!ok) setPickerError("Couldn't load who's on this event.");
+  }
+
+  async function handleReassign(candidate: Candidate) {
+    if (!candidate.userId) return;
+    setActionLoading("reassign");
+    setReassigningUserId(candidate.userId);
+    setPickerError(null);
+    const res = await fetch(`/api/events/${event.id}/reassign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ newOrganizerUserId: candidate.userId }),
+    });
+    if (res.ok) {
+      setActionLoading(null);
+      router.refresh();
+      return;
+    }
+    const body = await res.json().catch(() => null);
+    setPickerError(typeof body?.error === "string" ? body.error : "Couldn't hand off this event.");
+    // Eligibility may have changed since the list was fetched (e.g. they
+    // disconnected their write-target calendar in another tab) -- refresh
+    // rather than leaving a stale eligible-looking row in place.
+    await fetchCandidates();
+    setReassigningUserId(null);
+  }
+
   function handleEdit() {
     // Deliberately doesn't cancel the original here -- that only happens
     // once the replacement search is actually submitted successfully
@@ -158,7 +224,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
     }
   }
 
-  const headerText = useClientFormatted(
+  const headerText = useClientValue(
     () =>
       event.status === "CONFIRMED" && event.confirmedStart && event.confirmedEnd
         ? formatConfirmed(event.confirmedStart, event.confirmedEnd)
@@ -166,7 +232,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
     `${event.searchStart.slice(5, 7)}/${event.searchStart.slice(8, 10)} – ${event.searchEnd.slice(5, 7)}/${event.searchEnd.slice(8, 10)}`
   );
 
-  const searchWindowText = useClientFormatted(
+  const searchWindowText = useClientValue(
     () => formatDateRange(event.searchStart, event.searchEnd),
     `${event.searchStart.slice(5, 7)}/${event.searchStart.slice(8, 10)} – ${event.searchEnd.slice(5, 7)}/${event.searchEnd.slice(8, 10)}`
   );
@@ -244,6 +310,15 @@ export default function EventChip({ event }: { event: EventChipData }) {
                     Edit this search
                   </button>
                 )}
+                {event.isOrganizer && hasOtherParticipants && (
+                  <button
+                    onClick={handleOpenPicker}
+                    disabled={actionLoading !== null}
+                    className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal disabled:opacity-50"
+                  >
+                    {actionLoading === "loadCandidates" ? "Loading…" : "Leave & hand off"}
+                  </button>
+                )}
                 {event.isOrganizer && (
                   <button
                     onClick={handleCancel}
@@ -265,6 +340,18 @@ export default function EventChip({ event }: { event: EventChipData }) {
               </div>
             )}
 
+            {event.isOrganizer && pickerOpen && event.status === "SEARCHING" && (
+              <ReassignPicker
+                candidates={candidates}
+                confirmed={false}
+                actionLoading={actionLoading}
+                reassigningUserId={reassigningUserId}
+                pickerError={pickerError}
+                onPick={handleReassign}
+                onClose={handleOpenPicker}
+              />
+            )}
+
             {event.isOrganizer && event.status === "CONFIRMED" && !event.isPast && (
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
@@ -274,6 +361,15 @@ export default function EventChip({ event }: { event: EventChipData }) {
                 >
                   {actionLoading === "reopen" ? "Reopening…" : "Reschedule"}
                 </button>
+                {hasOtherParticipants && (
+                  <button
+                    onClick={handleOpenPicker}
+                    disabled={actionLoading !== null}
+                    className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal disabled:opacity-50"
+                  >
+                    {actionLoading === "loadCandidates" ? "Loading…" : "Leave & hand off"}
+                  </button>
+                )}
                 <button
                   onClick={handleCancel}
                   disabled={actionLoading !== null}
@@ -282,6 +378,17 @@ export default function EventChip({ event }: { event: EventChipData }) {
                   {actionLoading === "cancel" ? "Cancelling…" : "Cancel event"}
                 </button>
               </div>
+            )}
+            {event.isOrganizer && pickerOpen && event.status === "CONFIRMED" && !event.isPast && (
+              <ReassignPicker
+                candidates={candidates}
+                confirmed={true}
+                actionLoading={actionLoading}
+                reassigningUserId={reassigningUserId}
+                pickerError={pickerError}
+                onPick={handleReassign}
+                onClose={handleOpenPicker}
+              />
             )}
             {!event.isOrganizer && event.status === "CONFIRMED" && !event.isPast && (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -298,6 +405,88 @@ export default function EventChip({ event }: { event: EventChipData }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+const INELIGIBLE_REASON_TEXT: Record<NonNullable<Candidate["reason"]>, string> = {
+  "not-joined": "Hasn't joined Venndra yet.",
+  "no-write-target": "No calendar set to receive new events.",
+};
+
+function ReassignPicker({
+  candidates,
+  confirmed,
+  actionLoading,
+  reassigningUserId,
+  pickerError,
+  onPick,
+  onClose,
+}: {
+  candidates: Candidate[] | null;
+  confirmed: boolean;
+  actionLoading: string | null;
+  reassigningUserId: string | null;
+  pickerError: string | null;
+  onPick: (candidate: Candidate) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="mt-3 rounded-lg border border-line/60 p-3">
+      {candidates === null ? (
+        <p className="text-sm text-ink/50">Loading…</p>
+      ) : candidates.length === 0 ? (
+        <p className="text-sm text-ink/50">No one else is on this event.</p>
+      ) : (
+        <div className="grid gap-2.5">
+          {candidates.map((c) => {
+            const label = c.name ?? c.email;
+            return (
+              <div key={c.userId ?? c.email} className={`flex items-center justify-between gap-3 ${c.eligible ? "" : "opacity-50"}`}>
+                <div>
+                  <div className={`text-sm ${c.eligible ? "text-ink/80" : "text-ink/60"}`}>{label}</div>
+                  {c.eligible ? (
+                    <p className="mt-0.5 text-xs text-ink/50">
+                      {label} will become the organizer. You&apos;ll be removed from this event.
+                      {c.provider === "APPLE_CALDAV"
+                        ? confirmed
+                          ? ` Since iCloud doesn't support automatic invites, ${label} will need to invite everyone manually.`
+                          : ` Since iCloud doesn't support automatic invites, ${label} will need to invite everyone manually once a time is confirmed.`
+                        : ""}
+                    </p>
+                  ) : (
+                    <p className="mt-0.5 text-xs text-ink/40">{INELIGIBLE_REASON_TEXT[c.reason ?? "not-joined"]}</p>
+                  )}
+                </div>
+                {c.eligible && (
+                  <button
+                    onClick={() => onPick(c)}
+                    disabled={actionLoading !== null}
+                    // Only the row actually being handed off visually greys
+                    // out -- the rest stay functionally disabled (the
+                    // `disabled` attribute still blocks the click) but keep
+                    // their normal appearance, rather than every row dimming
+                    // for a single click elsewhere in the list.
+                    className={`shrink-0 rounded-full bg-amber px-3 py-1.5 text-xs font-medium text-white ${
+                      reassigningUserId === c.userId ? "opacity-50" : ""
+                    }`}
+                  >
+                    {reassigningUserId === c.userId ? "Handing off…" : "Hand off to them"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {pickerError && <p className="mt-2 text-sm text-red-600">{pickerError}</p>}
+      <button
+        onClick={onClose}
+        disabled={actionLoading !== null}
+        className="mt-3 text-xs font-medium text-ink/50 hover:text-ink/70 disabled:opacity-50"
+      >
+        Never mind
+      </button>
     </div>
   );
 }

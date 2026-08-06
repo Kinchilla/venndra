@@ -10,6 +10,7 @@ import { useSearchParams } from "next/navigation";
 import FriendPicker from "./FriendPicker";
 import FiltersBuilder, { WeeklyHours } from "./FiltersBuilder";
 import BackButton from "./BackButton";
+import { useClientValue } from "../hooks/useClientValue";
 
 type SavedGroup = { id: string; name: string; emails: string[]; defaultFilters: WeeklyHours | null };
 
@@ -61,8 +62,14 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   const durationHoursField = useNumberField(2, 0);
   const durationMinutesField = useNumberField(0, 0);
   const durationMin = durationHoursField.numericValue * 60 + durationMinutesField.numericValue;
-  const [startDate, setStartDate] = useState(() => localDateString(new Date()));
-  const [endDate, setEndDate] = useState(() => localDateString(addMonths(new Date(), 1)));
+  // Deliberately NOT seeded from new Date() here -- see the effect below
+  // that fills these in client-only, after mount.
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  // Same reasoning as the effect below, for the "Search from" input's own
+  // min attribute -- kept separate since it's a plain read-only derived
+  // value (never edited), unlike startDate/endDate themselves.
+  const todayLocal = useClientValue(() => localDateString(new Date()), "");
   const [emails, setEmails] = useState<string[]>([]);
   // CHANGED: seeded from the personal default (if any) instead of always {}.
   // An absent default still falls through to {} -> FiltersBuilder's own
@@ -97,6 +104,27 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
       .then((d) => setGroups(d.groups ?? []));
   }, []);
 
+  // Fills in "today" / "today + 1 month" as the default search window,
+  // client-only, after mount -- computing this from new Date() during the
+  // initial render would use the SERVER's system clock (Node's local-time
+  // getters reflect wherever the process actually runs, typically UTC),
+  // which very routinely disagrees with the visitor's own browser timezone
+  // on what day it currently is (e.g. any evening in a UTC-negative
+  // timezone is already "tomorrow" in UTC) -- rendering that into a
+  // hydrated <input value> crashes with a hydration mismatch. Skipped when
+  // either the fromEvent prefill or the sessionStorage draft below is about
+  // to fill these fields instead -- both take priority over this generic
+  // default, and (for fromEvent specifically) the prefillLoading gate below
+  // keeps the form hidden until that prefill lands anyway, so there's
+  // nothing user-visible to race even without this guard.
+  useEffect(() => {
+    if (searchParams.get("fromEvent")) return;
+    if (typeof window !== "undefined" && sessionStorage.getItem(DRAFT_STORAGE_KEY)) return;
+    setStartDate(localDateString(new Date()));
+    setEndDate(localDateString(addMonths(new Date(), 1)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [selfPrefilled, setSelfPrefilled] = useState(false);
   useEffect(() => {
     if (session?.user?.email && !selfPrefilled) {
@@ -106,6 +134,15 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   }, [session, selfPrefilled]);
 
   const [prefilledFromEvent, setPrefilledFromEvent] = useState(false);
+  // True only while a fromEvent prefill fetch is actually in flight -- lets
+  // the render below hold the form back until it lands. Without this, the
+  // form is interactive (and every field defaults to its normal blank/self
+  // state) the instant the page mounts, while this fetch is still loading in
+  // the background; if the user touches anything -- e.g. re-adding someone
+  // via FriendPicker -- before it resolves, its `set*` calls below
+  // unconditionally overwrite whatever the user just entered, silently
+  // discarding the edit the moment the slower fetch finally comes back.
+  const [prefillLoading, setPrefillLoading] = useState(() => !!searchParams.get("fromEvent"));
   useEffect(() => {
     const fromEventId = searchParams.get("fromEvent");
     if (!fromEventId || prefilledFromEvent) return;
@@ -132,7 +169,8 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
         setVotingEnabled(event.votingEnabled);
         if (event.voteTopX != null) voteTopXField.setValue(event.voteTopX);
         setEmails(event.participants.map((p: any) => p.email));
-      });
+      })
+      .finally(() => setPrefillLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, prefilledFromEvent]);
 
@@ -269,7 +307,20 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
       // await resolving and router.push completing (which briefly looked
       // like the search had failed).
       setSubmitting(false);
-      setError("Couldn't create that search — check the fields above.");
+      const body = await res.json().catch(() => null);
+      if (body?.code === "not-friends" && searchParams.get("fromEvent")) {
+        // The server's own message says "invite," which reads oddly here --
+        // editing carries over people who are already on the event, so the
+        // fix is to remove them from "People to include" below, not to
+        // befriend them. Only takes this branch while editing an existing
+        // event (fromEvent set); a genuinely new search still gets the
+        // server's own "invite"-flavored wording via the branch below.
+        setError("Can't save -- you're not friends with everyone on this event.");
+      } else if (typeof body?.error === "string") {
+        setError(body.error);
+      } else {
+        setError("Couldn't create that search — check the fields above.");
+      }
       return;
     }
     const { event } = await res.json();
@@ -286,6 +337,16 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
     // navigation -- otherwise hitting Back and resubmitting leaves a
     // duplicate event behind rather than looking like a single edit.
     router.push(`/events/${event.id}?justCreated=1`);
+  }
+
+  if (prefillLoading) {
+    return (
+      <main className="mx-auto max-w-lg px-6 py-12">
+        <BackButton fallbackHref="/events" />
+        <h1 className="font-display text-2xl font-semibold">Find us a time</h1>
+        <p className="mt-6 text-sm text-ink/50">Loading your existing search…</p>
+      </main>
+    );
   }
 
   return (
@@ -333,7 +394,7 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
             <input
               type="date"
               value={startDate}
-              min={localDateString(new Date())}
+              min={todayLocal}
               onChange={(e) => setStartDate(e.target.value)}
               required
               className="w-full rounded-lg border border-line px-3 py-2"

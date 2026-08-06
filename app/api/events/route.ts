@@ -71,7 +71,12 @@ export async function POST(req: NextRequest) {
   // is the actual enforcement point, since a raw API request could
   // otherwise bypass the UI entirely.
   const friendError = await validateAllFriends(userId, creator.email, allEmails);
-  if (friendError) return NextResponse.json({ error: friendError }, { status: 400 });
+  // `code` lets callers (e.g. NewEventForm's fromEvent edit-resubmission
+  // path) distinguish this specific failure from other 400s without
+  // string-matching `error`, which is meant for a brand-new-event audience
+  // ("invite") and reads oddly when what's actually happening is an edit
+  // to an event whose participants were already on it.
+  if (friendError) return NextResponse.json({ error: friendError, code: "not-friends" }, { status: 400 });
 
   const existingUsers = await prisma.user.findMany({
     where: { email: { in: allEmails } },

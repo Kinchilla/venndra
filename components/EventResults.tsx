@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useClientValue } from "../hooks/useClientValue";
 
 type ParticipantStatus = "free" | "tentative" | "busy" | "unknown" | "error";
 type ParticipantAvailability = { email: string; name: string | null; status: ParticipantStatus };
@@ -61,6 +62,32 @@ export default function EventResults({
   const [error, setError] = useState<string | null>(null);
   const [justConfirmed, setJustConfirmed] = useState<Slot | null>(null);
   const [actionLoading, setActionLoading] = useState<"cancel" | "reopen" | null>(null);
+
+  // Hooks must run unconditionally, so this is computed here even though
+  // it's only ever actually shown in the CONFIRMED/justConfirmed branch's
+  // JSX further down -- can't call useClientValue from inside that
+  // conditional return. Both toLocaleDateString's weekday/month names and
+  // toLocaleTimeString's own formatting are locale-dependent, and Node's
+  // server-side default locale can genuinely disagree with the browser's
+  // own -- computing either during SSR and hydrating against a different
+  // browser-computed string crashes with a hydration mismatch. Fallback
+  // mirrors EventChip's date-range fallback: a plain MM/DD sliced straight
+  // from the ISO string for the date, blank for the times (EventChip's own
+  // fallback doesn't attempt an approximate time either), so there's still
+  // a recognizable placeholder rather than fully blank text pre-mount.
+  const confirmedStartIso = justConfirmed?.start ?? confirmedStart;
+  const confirmedEndIso = justConfirmed?.end ?? confirmedEnd;
+  const confirmedDisplay = useClientValue(
+    () => ({
+      date: confirmedStartIso
+        ? new Date(confirmedStartIso).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })
+        : "",
+      startTime: confirmedStartIso ? formatTime(confirmedStartIso, timeFormat) : "",
+      endTime: confirmedEndIso ? formatTime(confirmedEndIso, timeFormat) : "",
+    }),
+    { date: confirmedStartIso ? `${confirmedStartIso.slice(5, 7)}/${confirmedStartIso.slice(8, 10)}` : "", startTime: "", endTime: "" },
+    [confirmedStartIso, confirmedEndIso, timeFormat]
+  );
 
   // Once someone's explicitly picked 12h/24h, remember that choice across
   // visits. Until then, default to whatever their system already uses --
@@ -257,15 +284,13 @@ export default function EventResults({
   }
 
   if (status === "CONFIRMED" || justConfirmed) {
-    const start = justConfirmed?.start ?? confirmedStart!;
-    const end = justConfirmed?.end ?? confirmedEnd!;
     return (
       <div className="rounded-2xl border border-teal bg-teal/5 p-6">
         <p className="font-display text-xl font-semibold text-teal">Locked in 🎉</p>
         <p className="mt-2 text-ink/70">
-          {new Date(start).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}, {formatTime(start, timeFormat)}
+          {confirmedDisplay.date}, {confirmedDisplay.startTime}
           {" – "}
-          {formatTime(end, timeFormat)}
+          {confirmedDisplay.endTime}
         </p>
         <p className="mt-1 text-sm text-ink/50">
           {writeCalendarProvider === "APPLE_CALDAV"

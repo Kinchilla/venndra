@@ -13,7 +13,10 @@ export default async function EventsPage() {
   const userId = (session.user as any).id;
   const events = await prisma.event.findMany({
     where: { OR: [{ creatorId: userId }, { participants: { some: { email: session.user.email ?? "" } } }] },
-    include: { participants: true, creator: { select: { name: true, email: true } } },
+    include: {
+      participants: { include: { user: { select: { name: true } } } },
+      creator: { select: { name: true, email: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -93,9 +96,15 @@ function EventSection({
                 title: e.title,
                 organizerName: e.creatorId === userId ? "You" : e.creator.name ?? e.creator.email ?? "Someone",
                 isOrganizer: e.creatorId === userId,
+                creatorId: e.creatorId,
                 isPast: isPast(e),
                 status: e.status,
-                participants: e.participants.map((p: any) => ({ email: p.email })),
+                participants: e.participants.map((p: any) => ({
+                  email: p.email,
+                  userId: p.userId,
+                  status: p.status,
+                  name: p.user?.name ?? null,
+                })),
                 durationMin: e.durationMin,
                 searchStart: e.searchStart.toISOString(),
                 searchEnd: e.searchEnd.toISOString(),
