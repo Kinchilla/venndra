@@ -53,18 +53,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
   }
 
-  const currentParticipant = event.participants.find((p) => p.userId === userId) ?? null;
-
   if (event.status === "SEARCHING") {
-    // Nothing's been written to a calendar yet -- just hand off the role.
+    // Nothing's been written to a calendar yet -- just transfer the role.
+    // A stays on as a regular participant (their own EventParticipant row,
+    // and any votes, are untouched) -- they're free to leave separately
+    // afterward via the normal "Leave this event" action if they want to.
     const updated = await prisma.event.update({
       where: { id: event.id },
       data: { creatorId: newOrganizerUserId },
     });
-    if (currentParticipant) {
-      // Cascades to delete A's EventVote rows automatically.
-      await prisma.eventParticipant.delete({ where: { id: currentParticipant.id } });
-    }
     return NextResponse.json({ event: updated });
   }
 
@@ -72,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // that fails, nothing has been destroyed yet and we can just fail clean
   // with the old event still intact on A's calendar.
   if (!event.writeCalendarSourceId || !event.confirmedStart || !event.confirmedEnd) {
-    return NextResponse.json({ error: "This event has no confirmed time to hand off" }, { status: 400 });
+    return NextResponse.json({ error: "This event has no confirmed time to transfer" }, { status: 400 });
   }
 
   const oldWriteSource = await prisma.calendarSource.findUnique({
@@ -80,12 +77,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     include: { connectedCalendar: true },
   });
 
-  const remainingParticipants = event.participants.filter((p) => p.id !== currentParticipant?.id);
+  // A stays a participant through the transfer (unlike the old "leave and
+  // hand off" behavior), so they belong on the new invite same as anyone
+  // else -- no filtering out the departing organizer here anymore.
   // Mirrors confirm/route.ts's attendeeEmails filter -- the new organizer's
   // own email isn't included as an attendee since it's implicitly the
   // calendar owner. Apple has no real attendee list, so its branch below
-  // uses remainingParticipants as-is instead.
-  const attendeeEmails = remainingParticipants
+  // uses event.participants as-is instead.
+  const attendeeEmails = event.participants
     .map((p) => p.email)
     .filter((email) => email !== newOrganizerParticipant.email);
 
@@ -114,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         attendeeEmails,
       });
     } else if (connectedCalendar.provider === "APPLE_CALDAV") {
-      const participantsForDescription = remainingParticipants.map((p) => ({
+      const participantsForDescription = event.participants.map((p) => ({
         email: p.email,
         name: p.user?.name ?? null,
       }));
@@ -140,7 +139,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
   }
 
-  // Best-effort cleanup of the old event -- the hand-off already succeeded
+  // Best-effort cleanup of the old event -- the transfer already succeeded
   // on C's calendar at this point, so don't block on this the same way
   // cancel/route.ts and leave/route.ts don't block on their own deletes.
   if (oldWriteSource && event.externalEventId) {
@@ -163,6 +162,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
+  // A's own EventParticipant/EventVote rows are left untouched throughout --
+  // they remain a regular participant after the transfer, free to leave
+  // separately afterward via the normal "Leave this event" action if they
+  // want to.
   const updated = await prisma.event.update({
     where: { id: event.id },
     data: {
@@ -174,12 +177,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       writeError: null,
     },
   });
-
-  if (currentParticipant) {
-    // Cascades to delete A's EventVote rows automatically. C's own
-    // EventParticipant/EventVote rows are untouched.
-    await prisma.eventParticipant.delete({ where: { id: currentParticipant.id } });
-  }
 
   return NextResponse.json({ event: updated });
 }

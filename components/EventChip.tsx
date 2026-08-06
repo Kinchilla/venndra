@@ -80,10 +80,10 @@ export default function EventChip({ event }: { event: EventChipData }) {
   // Separate from actionError -- lives and dies with the picker itself
   // (rendered inside ReassignPicker, reset whenever the picker opens or
   // closes) rather than in the chip's general error slot, which would
-  // otherwise keep a failed-handoff message visible even after collapsing
+  // otherwise keep a failed-transfer message visible even after collapsing
   // the picker that caused it.
   const [pickerError, setPickerError] = useState<string | null>(null);
-  // Which candidate's "Hand off to them" button is mid-request -- lets the
+  // Which candidate's "Make organizer" button is mid-request -- lets the
   // picker grey out only that one row rather than every row, even though
   // every button in the picker is functionally inert while this is set.
   const [reassigningUserId, setReassigningUserId] = useState<string | null>(null);
@@ -93,13 +93,25 @@ export default function EventChip({ event }: { event: EventChipData }) {
   const hasOtherParticipants = event.participants.some((p) => p.userId !== event.creatorId);
 
   async function handleCancel() {
-    // Apple write-back never sends real invites, so there's no cancellation
-    // notice to send either -- it's only ever removed from the organizer's
-    // own Apple calendar. Same reasoning as the leave-confirmation text above.
-    const cancelConfirmText =
-      event.status === "CONFIRMED" && event.writeCalendarProvider === "APPLE_CALDAV"
-        ? "Cancel this event? It'll be removed from the organizer's Apple Calendar, but since iCloud doesn't support automatic invites, other attendees won't get a cancellation notice."
-        : "Cancel this event? If it's already confirmed, everyone gets a cancellation notice on their calendar.";
+    // Checks event.status directly rather than hedging with an "if it's
+    // already confirmed" clause in the dialog text itself -- Venndra always
+    // knows which state the event is in, so there's no reason to make the
+    // person reading the dialog do that conditional reasoning themselves.
+    const transferSuggestion = hasOtherParticipants
+      ? " If you want to leave it yourself while keeping it intact for everyone else, you can transfer the organizer role and then leave it."
+      : "";
+    let cancelConfirmText: string;
+    if (event.status === "SEARCHING") {
+      cancelConfirmText = `Cancel this search? This will delete it for everyone.${transferSuggestion}`;
+    } else if (event.writeCalendarProvider === "APPLE_CALDAV") {
+      // Apple write-back never sends real invites, so there's no
+      // cancellation notice to send either -- it's only ever removed from
+      // the organizer's own Apple calendar. Same reasoning as the
+      // leave-confirmation text below.
+      cancelConfirmText = `Cancel this event? It'll be removed from the organizer's Apple Calendar, but since iCloud doesn't support automatic invites, other attendees won't get a cancellation notice.${transferSuggestion}`;
+    } else {
+      cancelConfirmText = `Cancel this event? This will delete it for everyone -- everyone gets a cancellation notice on their calendar.${transferSuggestion}`;
+    }
     if (!confirm(cancelConfirmText)) return;
     setActionLoading("cancel");
     setActionError(null);
@@ -139,7 +151,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
 
   // Doesn't touch pickerError itself -- callers decide what to show
   // alongside the refreshed list (a load failure vs. a stale-row refresh
-  // after a failed hand-off shouldn't stomp on each other's messaging).
+  // after a failed transfer shouldn't stomp on each other's messaging).
   async function fetchCandidates(): Promise<boolean> {
     setActionLoading("loadCandidates");
     const res = await fetch(`/api/events/${event.id}/reassign-candidates`);
@@ -181,7 +193,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
       return;
     }
     const body = await res.json().catch(() => null);
-    setPickerError(typeof body?.error === "string" ? body.error : "Couldn't hand off this event.");
+    setPickerError(typeof body?.error === "string" ? body.error : "Couldn't transfer the organizer role.");
     // Eligibility may have changed since the list was fetched (e.g. they
     // disconnected their write-target calendar in another tab) -- refresh
     // rather than leaving a stale eligible-looking row in place.
@@ -316,7 +328,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                     disabled={actionLoading !== null}
                     className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal disabled:opacity-50"
                   >
-                    {actionLoading === "loadCandidates" ? "Loading…" : "Leave & hand off"}
+                    {actionLoading === "loadCandidates" ? "Loading…" : "Transfer organizer role"}
                   </button>
                 )}
                 {event.isOrganizer && (
@@ -367,7 +379,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                     disabled={actionLoading !== null}
                     className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal disabled:opacity-50"
                   >
-                    {actionLoading === "loadCandidates" ? "Loading…" : "Leave & hand off"}
+                    {actionLoading === "loadCandidates" ? "Loading…" : "Transfer organizer role"}
                   </button>
                 )}
                 <button
@@ -447,7 +459,7 @@ function ReassignPicker({
                   <div className={`text-sm ${c.eligible ? "text-ink/80" : "text-ink/60"}`}>{label}</div>
                   {c.eligible ? (
                     <p className="mt-0.5 text-xs text-ink/50">
-                      {label} will become the organizer. You&apos;ll be removed from this event.
+                      {label} will become the organizer. You&apos;ll stay on as a participant -- leave separately afterward if you&apos;d like to.
                       {c.provider === "APPLE_CALDAV"
                         ? confirmed
                           ? ` Since iCloud doesn't support automatic invites, ${label} will need to invite everyone manually.`
@@ -471,7 +483,7 @@ function ReassignPicker({
                       reassigningUserId === c.userId ? "opacity-50" : ""
                     }`}
                   >
-                    {reassigningUserId === c.userId ? "Handing off…" : "Hand off to them"}
+                    {reassigningUserId === c.userId ? "Transferring…" : "Make organizer"}
                   </button>
                 )}
               </div>

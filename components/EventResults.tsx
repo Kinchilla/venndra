@@ -247,12 +247,23 @@ export default function EventResults({
   }
 
   async function handleCancel() {
-    // Same reasoning as the "Locked in" Apple note above -- no real invites
-    // went out, so there's no cancellation notice for other attendees either.
-    const cancelConfirmText =
-      status === "CONFIRMED" && writeCalendarProvider === "APPLE_CALDAV"
-        ? "Cancel this event? It'll be removed from the organizer's Apple Calendar, but since iCloud doesn't support automatic invites, other attendees won't get a cancellation notice."
-        : "Cancel this event? If it's already confirmed, everyone gets a cancellation notice on their calendar.";
+    // Checks status directly rather than hedging with an "if it's already
+    // confirmed" clause in the dialog text itself -- Venndra always knows
+    // which state the event is in, so there's no reason to make the person
+    // reading the dialog do that conditional reasoning themselves.
+    let cancelConfirmText: string;
+    if (status === "SEARCHING") {
+      cancelConfirmText = "Cancel this search? This will delete it for everyone.";
+    } else if (writeCalendarProvider === "APPLE_CALDAV") {
+      // Apple write-back never sends real invites, so there's no
+      // cancellation notice to send either -- it's only ever removed from
+      // the organizer's own Apple calendar. Same reasoning as the "Locked
+      // in" Apple note above.
+      cancelConfirmText =
+        "Cancel this event? It'll be removed from the organizer's Apple Calendar, but since iCloud doesn't support automatic invites, other attendees won't get a cancellation notice.";
+    } else {
+      cancelConfirmText = "Cancel this event? This will delete it for everyone -- everyone gets a cancellation notice on their calendar.";
+    }
     if (!confirm(cancelConfirmText)) return;
     setActionLoading("cancel");
     const res = await fetch(`/api/events/${eventId}/cancel`, { method: "POST" });
