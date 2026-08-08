@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { CALENDARS_CHANGED_EVENT, readCalendarsChanged } from "../lib/calendarEvents";
 
 type Source = { id: string; externalId: string; label: string; checkAvailability: boolean; isWriteTarget: boolean };
-type CalendarAccount = { id: string; provider: string; label: string; isEnabled: boolean; sources: Source[] };
+type CalendarAccount = {
+  id: string;
+  provider: string;
+  label: string;
+  accountEmail: string | null;
+  isEnabled: boolean;
+  sources: Source[];
+};
 type Row = { source: Source; account: CalendarAccount };
 
 const PROVIDER_LABEL: Record<string, string> = { GOOGLE: "Google", MICROSOFT: "Microsoft", APPLE_CALDAV: "iCloud" };
@@ -11,15 +19,33 @@ const PROVIDER_LABEL: Record<string, string> = { GOOGLE: "Google", MICROSOFT: "M
 export default function CalendarSourcesPanel() {
   const [calendars, setCalendars] = useState<CalendarAccount[] | null>(null);
 
-  useEffect(() => {
-    load(true);
-  }, []);
-
-  function load(sync = false) {
+  const load = useCallback((sync = false) => {
     fetch(`/api/calendars${sync ? "?sync=1" : ""}`)
       .then((r) => r.json())
       .then((d) => setCalendars(d.calendars ?? []));
-  }
+  }, []);
+
+  useEffect(() => {
+    load(true);
+
+    // Disconnecting an account elsewhere on this page removes its calendars
+    // from this list -- and re-syncs, which is what re-assigns a write target
+    // when the disconnected account happened to hold it.
+    //
+    // The removal is applied optimistically first: load(true) hits
+    // /api/calendars?sync=1, which round-trips to every remaining provider
+    // before answering, and leaving the disconnected account's calendars
+    // on screen for that long looks like the disconnect didn't take.
+    const onCalendarsChanged = (event: Event) => {
+      const { disconnectedCalendarId } = readCalendarsChanged(event);
+      if (disconnectedCalendarId) {
+        setCalendars((prev) => (prev ? prev.filter((c) => c.id !== disconnectedCalendarId) : prev));
+      }
+      load(true);
+    };
+    window.addEventListener(CALENDARS_CHANGED_EVENT, onCalendarsChanged);
+    return () => window.removeEventListener(CALENDARS_CHANGED_EVENT, onCalendarsChanged);
+  }, [load]);
 
   async function toggleCheck(sourceId: string, checkAvailability: boolean) {
     setCalendars((prev) =>
@@ -98,7 +124,14 @@ export default function CalendarSourcesPanel() {
               <td className="py-2.5 pr-2">
                 <div className="text-ink/80">{source.label}</div>
                 <div className="text-xs text-ink/40">
-                  {PROVIDER_LABEL[account.provider] ?? account.provider} · {account.label}
+                  {/*
+                    Prefer the provider account's own email -- with more than one
+                    Google/Microsoft account connected, "Google · Google Calendar"
+                    is both redundant and ambiguous about which account a calendar
+                    came from. Falls back to the generic label for rows with no
+                    stored email (e.g. Microsoft accounts that return no email claim).
+                  */}
+                  {PROVIDER_LABEL[account.provider] ?? account.provider} · {account.accountEmail ?? account.label}
                 </div>
               </td>
               <td className="py-2.5 px-2 text-center">

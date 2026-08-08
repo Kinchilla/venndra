@@ -25,11 +25,17 @@ export async function GET(req: NextRequest) {
   }
 
   const calendars = await prisma.connectedCalendar.findMany({
-    where: { userId },
+    // isEnabled is a leftover from an earlier "disconnect" design that detached
+    // a calendar by flipping this flag instead of deleting the row. Disconnect
+    // deletes now, so nothing sets it false any more -- the filter stays as a
+    // cheap guard, and because every other consumer (availability, confirm,
+    // join, reassign) filters on it too, so this list can't disagree with them.
+    where: { userId, isEnabled: true },
     select: {
       id: true,
       provider: true,
       label: true,
+      accountEmail: true,
       isEnabled: true,
       sources: {
         select: { id: true, externalId: true, label: true, checkAvailability: true, isWriteTarget: true },

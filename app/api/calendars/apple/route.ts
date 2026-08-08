@@ -23,16 +23,27 @@ export async function POST(req: NextRequest) {
   const { appleId, appSpecificPassword, label } = parsed.data;
   const userId = (session.user as any).id;
 
-  const connected = await prisma.connectedCalendar.create({
-    data: {
-      userId,
-      provider: "APPLE_CALDAV",
-      caldavUrl: "https://caldav.icloud.com",
-      caldavUsername: appleId,
-      caldavPasswordEncrypted: encrypt(appSpecificPassword),
-      label,
-    },
+  // Re-adding an iCloud account that's already here -- most likely one
+  // disconnected earlier, or one whose app-specific password was revoked at
+  // Apple and regenerated -- updates that row instead of creating a second
+  // one. Without this, disconnect + reconnect-via-this-form would leave two
+  // rows for the same iCloud address, both listed, only one live.
+  const existing = await prisma.connectedCalendar.findFirst({
+    where: { userId, provider: "APPLE_CALDAV", caldavUsername: appleId },
   });
+
+  const data = {
+    caldavUrl: "https://caldav.icloud.com",
+    caldavUsername: appleId,
+    caldavPasswordEncrypted: encrypt(appSpecificPassword),
+    accountEmail: appleId, // same value as caldavUsername, stored uniformly so the UI can read one field across all providers
+    label,
+    isEnabled: true,
+  };
+
+  const connected = existing
+    ? await prisma.connectedCalendar.update({ where: { id: existing.id }, data })
+    : await prisma.connectedCalendar.create({ data: { userId, provider: "APPLE_CALDAV", ...data } });
 
   await populateCalendarSources(connected.id);
 

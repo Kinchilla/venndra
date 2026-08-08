@@ -101,6 +101,16 @@ model ConnectedCalendar {
   caldavUsername          String?
   caldavPasswordEncrypted String?
 
+  // Which account at the provider this calendar came from, e.g.
+  // "dan@gmail.com". Captured at link time from the OAuth profile (Apple
+  // reuses caldavUsername, which is already the iCloud address). Needed
+  // because NextAuth's Account table stores no email, and once a user links
+  // a SECOND Google/Microsoft account the owning User's email no longer
+  // identifies which account a given calendar belongs to. Nullable: some
+  // Microsoft work/school accounts don't return an email claim, and rows
+  // predating this column may not have been backfillable.
+  accountEmail String?
+
   label     String // e.g. "Google (dan@gmail.com)", "iCloud"
   isEnabled Boolean @default(true)
 

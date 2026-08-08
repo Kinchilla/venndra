@@ -60,7 +60,7 @@ export const authOptions: NextAuthOptions = {
     // Whenever a Google or Microsoft account gets linked (first sign-in, or
     // "connect another calendar" later), automatically register it as an
     // availability source so the user doesn't have to do a separate step.
-    async linkAccount({ user, account }) {
+    async linkAccount({ user, account, profile }) {
       if (account.provider !== "google" && account.provider !== "azure-ad") return;
 
       const provider = account.provider === "google" ? "GOOGLE" : "MICROSOFT";
@@ -84,6 +84,13 @@ export const authOptions: NextAuthOptions = {
           userId: user.id,
           provider,
           nextAuthAccountId: dbAccount.id,
+          // Which provider account this calendar came from. Must come from
+          // `profile` (the account that just authenticated), NOT user.email
+          // -- once someone links a second Google/Microsoft account, the
+          // owning user's email is the WRONG answer for the new calendar.
+          // Left null if the provider returned no email (happens with some
+          // Microsoft work/school accounts); the UI falls back to `label`.
+          accountEmail: profile?.email ?? null,
           label: provider === "GOOGLE" ? "Google Calendar" : "Outlook Calendar",
         },
       });
@@ -126,5 +133,12 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: "/login",
+    // Reuses /login rather than a dedicated route. The one case this
+    // currently handles is AccountNotLinkedError from the "connect another
+    // account" flow (Settings) -- see the error-param handling in
+    // app/login/page.tsx for how it distinguishes "still signed in, picked
+    // an account that belongs to someone else" from a genuine first-time
+    // sign-in collision.
+    error: "/login",
   },
 };
