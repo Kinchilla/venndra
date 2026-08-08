@@ -2,14 +2,20 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
+import { connectErrorMessage } from "../../lib/authErrors";
 import BackButton from "../../components/BackButton";
 import ProfileForm from "../../components/ProfileForm";
 import DefaultSearchTimesForm from "../../components/DefaultSearchTimesForm";
 import { WeeklyHours } from "../../components/FiltersBuilder";
 import ConnectedCalendarsSection from "../../components/ConnectedCalendarsSection";
+import ConnectedAccountsSection from "../../components/ConnectedAccountsSection";
 import LogoutButton from "../../components/LogoutButton";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams?: { connectError?: string };
+}) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login?callbackUrl=/settings");
 
@@ -47,7 +53,24 @@ export default async function SettingsPage() {
         <p className="mt-1 text-sm text-ink/50">
           Pick which calendars count toward your availability, and which one new events get added to.
         </p>
+        {/* Carries whatever NextAuth error code came back from a failed
+            "connect another account" attempt, bounced here by /login so a
+            signed-in user isn't dropped on a sign-in form. */}
+        {searchParams?.connectError && (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {connectErrorMessage(searchParams.connectError)}
+          </p>
+        )}
         <ConnectedCalendarsSection />
+      </section>
+
+      <section className="mt-10">
+        <h2 className="font-display text-lg font-semibold">Connected accounts</h2>
+        <p className="mt-1 text-sm text-ink/50">
+          The accounts Venndra reads calendars from. The one you sign in with stays put; any others you've added can be
+          disconnected, which removes them from Venndra entirely.
+        </p>
+        <ConnectedAccountsSection />
       </section>
     </main>
   );
