@@ -12,6 +12,10 @@ export default async function EditGroupPage({ params }: { params: { id: string }
   const group = await prisma.savedGroup.findUnique({ where: { id: params.id } });
   if (!group || group.userId !== (session.user as any).id) notFound();
 
+  // Seeds the picker if this group has no window yet and the user switches the
+  // toggle on -- otherwise they'd start from a blank grid.
+  const user = await prisma.user.findUnique({ where: { id: (session.user as any).id } });
+
   return (
     <main className="mx-auto max-w-lg px-6 py-12">
       <BackButton fallbackHref="/groups" />
@@ -24,6 +28,7 @@ export default async function EditGroupPage({ params }: { params: { id: string }
         initialName={group.name}
         initialEmails={group.emails}
         initialFilters={(group.defaultFilters as any) ?? undefined}
+        userDefaultFilters={(user?.defaultSearchFilters as any) ?? null}
       />
     </main>
   );

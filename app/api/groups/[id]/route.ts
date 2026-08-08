@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../../lib/auth";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../../../lib/prisma";
 import { recordKnownContacts } from "../../../../lib/knownContacts";
 import { validateAllFriends } from "../../../../lib/friends";
@@ -9,7 +10,10 @@ import { validateAllFriends } from "../../../../lib/friends";
 const groupSchema = z.object({
   name: z.string().min(1).max(60),
   emails: z.array(z.string().email()).min(1).max(50),
-  defaultFilters: z.record(z.array(z.tuple([z.string(), z.string()]))).optional(),
+  // Nullable, not just optional: null is how the client says "this group
+  // has no search window", which has to be distinguishable from the field
+  // simply being absent.
+  defaultFilters: z.record(z.array(z.tuple([z.string(), z.string()]))).nullable().optional(),
 });
 
 async function getOwnedGroup(id: string, userId: string) {
@@ -46,7 +50,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // events capture their own participant list at creation time, so editing
   // a group later never reshuffles who's invited to a search already in
   // progress. See README.
-  const group = await prisma.savedGroup.update({ where: { id: params.id }, data: parsed.data });
+  // An omitted defaultFilters leaves the existing window alone; an explicit
+  // null clears it (Prisma needs DbNull rather than a bare null for Json?
+  // columns -- see the create route for the DbNull/JsonNull distinction).
+  const { defaultFilters, ...rest } = parsed.data;
+  const group = await prisma.savedGroup.update({
+    where: { id: params.id },
+    data: {
+      ...rest,
+      ...(defaultFilters === undefined ? {} : { defaultFilters: defaultFilters ?? Prisma.DbNull }),
+    },
+  });
 
   await recordKnownContacts((session.user as any).id, parsed.data.emails);
 

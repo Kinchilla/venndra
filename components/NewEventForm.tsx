@@ -11,14 +11,19 @@ import FriendPicker from "./FriendPicker";
 import FiltersBuilder, { WeeklyHours } from "./FiltersBuilder";
 import BackButton from "./BackButton";
 import { useClientValue } from "../hooks/useClientValue";
+import { buttonClass } from "../lib/buttonStyles";
+import { stashGroupPrefill } from "../lib/groupPrefill";
+import {
+  clearEventDraftRestoreFlag,
+  EVENT_DRAFT_KEY,
+  hasEventDraftRestoreFlag,
+  readSubstantiveEventDraft,
+} from "../lib/eventDraft";
+import { hasSearchWindow } from "../lib/searchWindow";
+import Toggle from "./Toggle";
+import Button from "./Button";
 
 type SavedGroup = { id: string; name: string; emails: string[]; defaultFilters: WeeklyHours | null };
-
-// sessionStorage (not localStorage) -- a draft should survive navigating
-// away and back within the same tab (e.g. clicking Back to retry), but not
-// linger indefinitely across separate visits/tabs. Cleared on successful
-// submit, in handleSubmit below.
-const DRAFT_STORAGE_KEY = "venndra-new-event-draft";
 
 function localDateString(d: Date): string {
   const y = d.getFullYear();
@@ -71,6 +76,59 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   // value (never edited), unlike startDate/endDate themselves.
   const todayLocal = useClientValue(() => localDateString(new Date()), "");
   const [emails, setEmails] = useState<string[]>([]);
+  // False until the sessionStorage draft has been read (or ruled out). Guards
+  // the persist effect below from writing blank initial state over a real draft.
+  const [draftLoaded, setDraftLoaded] = useState(false);
+
+  // Whether this particular arrival should bring the saved draft back. Read
+  // once during the first render (non-destructively, so StrictMode's second
+  // render sees the same answer) and consumed in an effect below. Captured in
+  // state so every effect this render decides from the same value, rather than
+  // whichever of them happened to read sessionStorage first.
+  const [shouldRestoreDraft] = useState(() => hasEventDraftRestoreFlag());
+  useEffect(() => {
+    clearEventDraftRestoreFlag();
+  }, []);
+
+  // An unfinished event found on an ordinary arrival -- offered rather than
+  // applied. Captured during the FIRST render, which matters: the persist
+  // effect overwrites storage with this (blank) form's state moments later, so
+  // by the time the banner is on screen the stored copy is already gone. What
+  // the Restore button applies is this in-memory snapshot.
+  //
+  // Read in a lazy initializer for the same reason as the flag above -- renders
+  // happen before any effect writes, and StrictMode's second render pass reads
+  // the same untouched value. Skipped entirely when the draft is about to be
+  // restored automatically, so the two paths can't both fire.
+  const [offeredDraft, setOfferedDraft] = useState<Record<string, unknown> | null>(() =>
+    hasEventDraftRestoreFlag() ? null : readSubstantiveEventDraft()
+  );
+
+  /** Applies a stored draft to the form. Shared by the automatic restore and the Restore button, so they can never diverge on which fields come back. */
+  function applyDraft(draft: any) {
+    if (typeof draft.title === "string") setTitle(draft.title);
+    if (typeof draft.description === "string") setDescription(draft.description);
+    if (typeof draft.location === "string") setLocation(draft.location);
+    if (typeof draft.durationHours === "number") durationHoursField.setValue(draft.durationHours);
+    if (typeof draft.durationMinutes === "number") durationMinutesField.setValue(draft.durationMinutes);
+    if (typeof draft.startDate === "string") setStartDate(draft.startDate);
+    if (typeof draft.endDate === "string") setEndDate(draft.endDate);
+    if (draft.filters) setFiltersFromExternalSource(draft.filters);
+    if (typeof draft.useThreshold === "boolean") setUseThreshold(draft.useThreshold);
+    if (typeof draft.minAttendees === "number") minAttendeesField.setValue(draft.minAttendees);
+    if (typeof draft.votingEnabled === "boolean") setVotingEnabled(draft.votingEnabled);
+    if (typeof draft.voteTopX === "number") voteTopXField.setValue(draft.voteTopX);
+    if (Array.isArray(draft.emails)) {
+      setEmails(draft.emails);
+      // Read the recorded flag rather than assuming true. Assuming meant an
+      // absent organiser was treated as "they removed themselves on purpose",
+      // when it could equally be a draft written in the moment before the
+      // self-prefill effect ran (useSession resolves asynchronously, so there's
+      // a real window where emails is legitimately empty). Getting that wrong
+      // dropped the organiser from their own event.
+      setSelfPrefilled(draft.selfPrefilled === true);
+    }
+  }
   // CHANGED: seeded from the personal default (if any) instead of always {}.
   // An absent default still falls through to {} -> FiltersBuilder's own
   // hardcoded fallback, same as before.
@@ -119,7 +177,11 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   // nothing user-visible to race even without this guard.
   useEffect(() => {
     if (searchParams.get("fromEvent")) return;
-    if (typeof window !== "undefined" && sessionStorage.getItem(DRAFT_STORAGE_KEY)) return;
+    // Skipped only when a draft is genuinely about to be restored over these.
+    // Previously this checked merely whether a draft EXISTED, which meant an
+    // old abandoned draft suppressed the date defaults on a form that then
+    // started blank -- leaving both date fields empty.
+    if (shouldRestoreDraft) return;
     setStartDate(localDateString(new Date()));
     setEndDate(localDateString(addMonths(new Date(), 1)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,37 +241,48 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   // when there's no fromEvent prefill in progress, since that's a more
   // specific, authoritative source for the same fields and should win.
   useEffect(() => {
-    if (searchParams.get("fromEvent")) return;
-    const raw = typeof window !== "undefined" ? sessionStorage.getItem(DRAFT_STORAGE_KEY) : null;
-    if (!raw) return;
+    // draftLoaded is set on EVERY exit path, including the early returns --
+    // the save effect below refuses to run until it's true, so missing it
+    // anywhere would mean the form silently stopped persisting.
+    if (searchParams.get("fromEvent")) {
+      setDraftLoaded(true);
+      return;
+    }
+    // Restoring is opt-in per arrival, not automatic. Landing here from the
+    // header, a bookmark, or a fresh tab gives a clean form even though a draft
+    // is sitting in storage; only a flow that marked itself (today: saving a
+    // group started from this form) brings it back.
+    if (!shouldRestoreDraft) {
+      setDraftLoaded(true);
+      return;
+    }
+    const raw = typeof window !== "undefined" ? sessionStorage.getItem(EVENT_DRAFT_KEY) : null;
+    if (!raw) {
+      setDraftLoaded(true);
+      return;
+    }
     try {
-      const draft = JSON.parse(raw);
-      if (typeof draft.title === "string") setTitle(draft.title);
-      if (typeof draft.description === "string") setDescription(draft.description);
-      if (typeof draft.location === "string") setLocation(draft.location);
-      if (typeof draft.durationHours === "number") durationHoursField.setValue(draft.durationHours);
-      if (typeof draft.durationMinutes === "number") durationMinutesField.setValue(draft.durationMinutes);
-      if (typeof draft.startDate === "string") setStartDate(draft.startDate);
-      if (typeof draft.endDate === "string") setEndDate(draft.endDate);
-      if (draft.filters) setFiltersFromExternalSource(draft.filters);
-      if (typeof draft.useThreshold === "boolean") setUseThreshold(draft.useThreshold);
-      if (typeof draft.minAttendees === "number") minAttendeesField.setValue(draft.minAttendees);
-      if (typeof draft.votingEnabled === "boolean") setVotingEnabled(draft.votingEnabled);
-      if (typeof draft.voteTopX === "number") voteTopXField.setValue(draft.voteTopX);
-      if (Array.isArray(draft.emails)) {
-        setEmails(draft.emails);
-        setSelfPrefilled(true); // already includes self if it did when saved -- don't re-prepend
-      }
+      applyDraft(JSON.parse(raw));
     } catch {
       // Corrupt/unreadable draft -- ignore it rather than blocking the page.
     }
+    setDraftLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Persists the current form state on every change, so it survives
   // navigating away and back within the tab. Cheap enough to run on every
   // keystroke -- sessionStorage writes are synchronous and local.
+  //
+  // Gated on draftLoaded, and that gate is load-bearing rather than tidiness.
+  // Effects run in declaration order within a commit, so on mount this used to
+  // fire straight after the restore above -- but BEFORE the restore's setState
+  // had flushed, meaning it captured the blank initial values and wrote them
+  // over the very draft just read. React StrictMode then remounts in dev, and
+  // the second restore read the blanked draft, so leaving /events/new and
+  // coming back lost everything.
   useEffect(() => {
+    if (!draftLoaded) return;
     const draft = {
       title,
       description,
@@ -224,10 +297,17 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
       votingEnabled,
       voteTopX: voteTopXField.numericValue,
       emails,
+      // Distinguishes "the organiser isn't in this list because they took
+      // themselves out" from "...because the session hadn't loaded yet when
+      // this was written". Without it the restore can't tell, and guessing
+      // either way is wrong half the time.
+      selfPrefilled,
     };
-    sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    sessionStorage.setItem(EVENT_DRAFT_KEY, JSON.stringify(draft));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    draftLoaded,
+    selfPrefilled,
     title,
     description,
     location,
@@ -255,10 +335,48 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
     const group = groups.find((g) => g.id === groupId);
     if (group) {
       setEmails(group.emails);
-      // CHANGED: was setFilters(group.defaultFilters)
-      if (group.defaultFilters) setFiltersFromExternalSource(group.defaultFilters);
+      // Groups may have no search window of their own (the "Custom search
+      // window" toggle left off). Those apply their PEOPLE without touching
+      // the times, leaving whatever was already set here alone. hasSearchWindow
+      // rather than a truthiness check because `{}` is truthy but means the
+      // same "no opinion" -- see lib/searchWindow.
+      if (hasSearchWindow(group.defaultFilters)) setFiltersFromExternalSource(group.defaultFilters);
     }
   }
+
+  // Keeps the threshold satisfiable when the guest list shrinks. The input's
+  // own `max` stops the spinner climbing too high, but it can't repair a value
+  // that WAS valid and then stopped being so: set "at least 3", remove someone,
+  // and 3 is suddenly unmeetable. Without this the search would run and return
+  // nothing, with no visible reason.
+  //
+  // Deliberately keyed on the participant count alone, not on the field's
+  // value, so it never interrupts mid-typing -- someone entering "12" for a
+  // 15-person event passes through 1 and 2 without being yanked downward. A
+  // typed value that's still too high when submitted is caught server-side
+  // instead, which is the backstop that check exists for.
+  useEffect(() => {
+    const cap = Math.max(1, emails.length);
+    if (minAttendeesField.numericValue > cap) minAttendeesField.setValue(cap);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emails.length]);
+
+  // The "you could save these people as a group" nudge. Counted excluding the
+  // organiser, who is added automatically rather than typed -- two OTHER people
+  // is the point where "this same set of people" starts to mean something, and
+  // it keeps a one-on-one from being told to make a group of two.
+  //
+  // Suppressed whenever this exact set of people is ALREADY a saved group --
+  // any of them, not just one clicked from the chips above. Checking the
+  // applied group alone missed the case that matters most: coming back from
+  // having just created a group from these very people, where the tip would
+  // cheerfully suggest doing the thing they had that second finished doing.
+  // Set comparison, so adding or removing anyone makes it relevant again.
+  const typedFriendCount = emails.filter((e) => e !== cachedCurrentUser?.email).length;
+  const isAlreadyASavedGroup = groups.some(
+    (g) => g.emails.length === emails.length && g.emails.every((e) => emails.includes(e))
+  );
+  const showGroupTip = !isAlreadyASavedGroup && typedFriendCount >= 2;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -330,7 +448,7 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
       fetch(`/api/events/${fromEventId}/cancel`, { method: "POST" }).catch(() => {});
     }
 
-    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    sessionStorage.removeItem(EVENT_DRAFT_KEY);
     // justCreated=1 lets /events/[id] know this event was just created by
     // this exact submission, so its Back button can offer "redo this search
     // and cancel it" (same as Edit this search) instead of a generic back
@@ -353,6 +471,42 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
     <main className="mx-auto max-w-lg px-6 py-12">
       <BackButton fallbackHref="/events" />
       <h1 className="font-display text-2xl font-semibold">Find us a time</h1>
+
+      {/* Offered, never applied on its own -- the form starts blank and stays
+          that way unless this is clicked. See lib/eventDraft for why arrival
+          alone isn't treated as intent to resume. */}
+      {offeredDraft && (
+        // Sits directly on the page background -- no card. The buttons follow
+        // the sentence in the same row rather than being pushed to the far
+        // edge, so the offer reads as one line of prose with its two answers
+        // attached. flex-wrap lets them drop below on narrow screens instead of
+        // squeezing the text.
+        <div className="mt-4 flex flex-wrap items-center gap-1">
+          <p className="text-sm text-ink/70">
+            You have an unfinished event draft
+            {typeof offeredDraft.title === "string" && offeredDraft.title.trim() !== ""
+              ? `: "${offeredDraft.title}"`
+              : ""}
+          </p>
+          {/* nav rather than quiet: both are borderless, but nav's text sits one
+              step darker, which gives the action you'd usually want a little
+              weight over Dismiss without reintroducing an outline. */}
+          <Button
+            type="button"
+            variant="nav"
+            size="sm"
+            onClick={() => {
+              applyDraft(offeredDraft);
+              setOfferedDraft(null);
+            }}
+          >
+            Restore it
+          </Button>
+          <Button type="button" variant="quiet" size="sm" onClick={() => setOfferedDraft(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="mt-6 grid gap-5">
         <label className="text-sm">
@@ -426,19 +580,35 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
                 type="button"
                 key={g.id}
                 onClick={() => applyGroup(g.id)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedGroupId === g.id ? "border-amber bg-amber/10 text-amber" : "border-line text-ink/60 hover:border-amber hover:text-amber"
-                }`}
+                // No lasting "selected" styling: clicking a group COPIES its
+                // people in, it doesn't bind the form to that group. Keeping a
+                // chip highlighted afterwards claimed a link that the first
+                // edit to the list quietly broke. The shared active state fills
+                // it for the duration of the press instead, which acknowledges
+                // the click without asserting anything after it.
+                className={buttonClass({ variant: "edit", size: "sm" })}
               >
                 {g.name}
               </button>
             ))}
-            <Link
-              href="/groups/new"
-              className="rounded-full border border-dashed border-line px-3 py-1.5 text-xs font-medium text-ink/60 hover:border-ink hover:text-ink transition-colors"
-            >
-              + New group
-            </Link>
+            {/*
+              Only offered when there are no saved groups to start from. With
+              groups present this section is for picking one, and leaving
+              halfway through organising an event to go build a group is an odd
+              detour to advertise there -- the tip under "People to include"
+              catches that case at the moment it's actually relevant instead.
+              Groups also remain a permanent nav link in the header, so this
+              isn't the only way to find the feature.
+            */}
+            {groups.length === 0 && (
+              <Link
+                href="/groups/new"
+                onClick={() => stashGroupPrefill(emails, filters)}
+                className={buttonClass({ variant: "edit", size: "sm" })}
+              >
+                Create a group
+              </Link>
+            )}
           </div>
         </div>
 
@@ -450,6 +620,15 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
             currentUser={cachedCurrentUser}
             onPendingTextChange={setPickerHasPendingText}
           />
+          {showGroupTip && (
+            <p className="mt-1.5 text-xs text-ink/50">
+              Tip: if you often make plans with this same set of people, you can{" "}
+              <Link href="/groups/new" onClick={() => stashGroupPrefill(emails, filters)} className="text-teal underline">
+                create a group
+              </Link>{" "}
+              to make planning even easier!
+            </p>
+          )}
         </div>
 
         <div className="text-sm">
@@ -460,13 +639,32 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
           <FiltersBuilder key={filtersVersion} initial={filters} onChange={setFilters} />
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={useThreshold} onChange={(e) => setUseThreshold(e.target.checked)} />
+        {/*
+          A <div>, not a <label>, unlike the voting row below: this sentence has
+          a number input embedded in it, and a label wrapping two controls binds
+          to the first one -- so clicking near the number used to flip the
+          toggle. The switch carries its own label element and accessible name;
+          the sentence beside it is now just text.
+        */}
+        <div className="flex items-center gap-2 text-sm">
+          <Toggle
+            checked={useThreshold}
+            onChange={setUseThreshold}
+            aria-label="Only show slots with a minimum number of people free"
+          />
           <span className="text-ink/70">Only show slots with at least</span>
           <input
             type="number"
             min={1}
-            max={emails.length + 1 || 1}
+            // The ceiling is the participant count, and `emails` already
+            // includes the organiser (it's pre-filled with their own address,
+            // and the API builds participants from this list alone) -- the old
+            // `emails.length + 1` double-counted them, offering a threshold
+            // that could never be met. The `|| 1` fallback it carried was worse
+            // than useless: with an empty list it evaluated to max=1, pinning
+            // the field at its minimum so the spinner arrows did nothing at
+            // all. Math.max keeps a valid max without reintroducing that.
+            max={Math.max(1, emails.length)}
             value={minAttendeesField.text}
             onChange={minAttendeesField.onChange}
             onBlur={minAttendeesField.onBlur}
@@ -474,16 +672,20 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
             className="w-16 rounded-lg border border-line px-2 py-1 disabled:opacity-40"
           />
           <span className="text-ink/70">{minAttendeesField.numericValue === 1 ? "person" : "people"} free</span>
-        </label>
+        </div>
 
         <div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={votingEnabled} onChange={(e) => setVotingEnabled(e.target.checked)} />
-            <span className="text-ink/70">Participants vote for times</span>
-          </label>
+          <Toggle
+            checked={votingEnabled}
+            onChange={setVotingEnabled}
+            labelPosition="after"
+            label={<span className="text-sm text-ink/70">Participants vote for times</span>}
+          />
           <div className="accordion" data-open={votingEnabled}>
             <div className="accordion-inner">
-              <label className="mt-2 flex items-center gap-2 pl-6 text-sm">
+              {/* pl matches the switch's 44px width plus the 8px gap, so this
+                  nested row still lines up under the label text above it. */}
+              <label className="mt-2 flex items-center gap-2 pl-[52px] text-sm">
                 <span className="text-ink/70">Participants vote for top</span>
                 <input
                   type="number"
@@ -502,7 +704,7 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button type="submit" disabled={submitting || pickerHasPendingText} className="w-fit rounded-full bg-amber px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={submitting || pickerHasPendingText} className={buttonClass({ variant: "primary", size: "lg", className: "w-fit" })}>
           {submitting ? "Searching…" : "Start the search"}
         </button>
       </form>

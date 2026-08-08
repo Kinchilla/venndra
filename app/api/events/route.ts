@@ -66,6 +66,25 @@ export async function POST(req: NextRequest) {
   // to pre-filling the creator's own email, but they're free to remove it.
   const allEmails = Array.from(new Set(parsed.data.emails));
 
+  // A threshold higher than the number of people invited can never be met, so
+  // the search would return zero slots forever with nothing on screen
+  // explaining why. Checked here rather than only in the form because this is
+  // the real invariant -- the form's `max` guards the spinner, but a value
+  // typed before someone was removed, a stale tab, or a direct API call can
+  // all still arrive with an impossible number. Note it counts allEmails
+  // (deduplicated) rather than the raw list, so repeating an address can't
+  // inflate the ceiling.
+  if (parsed.data.minAttendees !== undefined && parsed.data.minAttendees > allEmails.length) {
+    return NextResponse.json(
+      {
+        error: `Only ${allEmails.length} ${
+          allEmails.length === 1 ? "person is" : "people are"
+        } invited, so "at least ${parsed.data.minAttendees} free" can never match.`,
+      },
+      { status: 400 }
+    );
+  }
+
   // Every invited email (other than the creator's own) must belong to an
   // accepted friend -- the picker UI already only offers friends, but this
   // is the actual enforcement point, since a raw API request could
