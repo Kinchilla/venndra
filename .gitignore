@@ -29,3 +29,9 @@ npm-debug.log*
 
 # Prisma
 /prisma/*.db
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+
+# Local Claude Code settings
+.claude/settings.local.json
