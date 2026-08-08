@@ -19,6 +19,13 @@ model Account {
   refresh_token_expires_in Int?
   access_token      String? @db.Text
   expires_at        Int?
+  // Microsoft's "extended expiry" -- how long the access token stays usable if
+  // Entra ID itself is unreachable. Venndra never reads it, but the NextAuth
+  // Prisma adapter writes the provider's ENTIRE token response into this table,
+  // so any field Microsoft returns needs a column or the whole account.create()
+  // is rejected and the link silently fails. Same reason
+  // refresh_token_expires_in above exists (that one is Google/GitHub's extra).
+  ext_expires_in    Int?
   token_type        String?
   scope             String?
   id_token          String? @db.Text
