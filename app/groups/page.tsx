@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
+import { buttonClass } from "../../lib/buttonStyles";
 import BackButton from "../../components/BackButton";
 import GroupChip from "../../components/GroupChip";
 
@@ -30,7 +31,7 @@ export default async function GroupsPage() {
       <BackButton fallbackHref="/events" />
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-semibold">Groups</h1>
-        <Link href="/groups/new" className="rounded-full bg-amber px-4 py-2 text-sm font-medium text-white">
+        <Link href="/groups/new" className={buttonClass({ variant: "primary" })}>
           + New group
         </Link>
       </div>

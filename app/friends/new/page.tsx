@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import BackButton from "../../../components/BackButton";
 import SuggestedFriendsSection from "../../../components/SuggestedFriendsSection";
+import { buttonClass } from "../../../lib/buttonStyles";
 
 export default function NewFriendPage() {
   const router = useRouter();
@@ -85,7 +86,7 @@ export default function NewFriendPage() {
         <button
           type="submit"
           disabled={submitting || success}
-          className="mt-2 w-fit rounded-full bg-amber px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+          className={buttonClass({ variant: "primary", size: "lg", className: "mt-2 w-fit" })}
         >
           {submitting ? "Sending…" : "Send request"}
         </button>

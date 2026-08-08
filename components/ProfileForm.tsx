@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
+import { buttonClass } from "../lib/buttonStyles";
 
 export default function ProfileForm({
   initialName,
@@ -109,7 +110,7 @@ export default function ProfileForm({
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-full bg-amber px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+          className={buttonClass({ variant: "primary", size: "lg" })}
         >
           {submitting ? "Saving…" : "Save"}
         </button>

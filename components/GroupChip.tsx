@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WeeklyHours } from "./FiltersBuilder";
+import { buttonClass } from "../lib/buttonStyles";
 
 type Member = { email: string; name: string | null; image: string | null };
 
@@ -92,14 +93,14 @@ export default function GroupChip({
             <div className="mt-3 flex flex-wrap gap-2">
               <Link
                 href={`/groups/${id}`}
-                className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal"
+                className={buttonClass({ variant: "edit" })}
               >
                 Edit this group
               </Link>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+                className={buttonClass({ variant: "danger" })}
               >
                 {deleting ? "Deleting…" : "Delete this group"}
               </button>

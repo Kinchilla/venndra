@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import ConnectAppleForm from "./ConnectAppleForm";
+import { buttonClass } from "../lib/buttonStyles";
 
 export default function JoinPrompt({ eventId }: { eventId: string }) {
   const router = useRouter();
@@ -25,13 +26,13 @@ export default function JoinPrompt({ eventId }: { eventId: string }) {
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={() => signIn("google", { callbackUrl: `/events/${eventId}` })}
-          className="rounded-full border border-line px-4 py-2 text-sm hover:border-ink transition-colors"
+          className={buttonClass({ variant: "neutral" })}
         >
           Connect Google
         </button>
         <button
           onClick={() => signIn("azure-ad", { callbackUrl: `/events/${eventId}` })}
-          className="rounded-full border border-line px-4 py-2 text-sm hover:border-ink transition-colors"
+          className={buttonClass({ variant: "neutral" })}
         >
           Connect Microsoft
         </button>

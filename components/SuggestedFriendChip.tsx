@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { buttonClass } from "../lib/buttonStyles";
 
 type SuggestedUser = { id: string; name: string | null; email: string | null; image: string | null };
 
@@ -63,14 +64,14 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
         <button
           onClick={handleSend}
           disabled={loading !== null}
-          className="rounded-full bg-amber px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className={buttonClass({ variant: "primary" })}
         >
           {loading === "send" ? "Sending…" : "Send request"}
         </button>
         <button
           onClick={handleDismiss}
           disabled={loading !== null}
-          className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+          className={buttonClass({ variant: "danger" })}
         >
           {loading === "dismiss" ? "Dismissing…" : "Dismiss"}
         </button>

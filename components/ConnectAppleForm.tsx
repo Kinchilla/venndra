@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { buttonClass } from "../lib/buttonStyles";
 
 export default function ConnectAppleForm({ onConnected }: { onConnected?: () => void }) {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function ConnectAppleForm({ onConnected }: { onConnected?: () => 
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-full border border-line px-4 py-2 text-sm hover:border-ink transition-colors"
+        className={buttonClass({ variant: "neutral" })}
       >
         + Connect iCloud calendar
       </button>
@@ -90,10 +91,10 @@ export default function ConnectAppleForm({ onConnected }: { onConnected?: () => 
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       <div className="mt-4 flex gap-2">
-        <button type="submit" disabled={submitting} className="rounded-full bg-teal px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={submitting} className={buttonClass({ variant: "primary" })}>
           {submitting ? "Connecting…" : "Connect"}
         </button>
-        <button type="button" onClick={() => setOpen(false)} className="rounded-full px-4 py-2 text-sm text-ink/60">
+        <button type="button" onClick={() => setOpen(false)} className={buttonClass({ variant: "quiet" })}>
           Cancel
         </button>
       </div>

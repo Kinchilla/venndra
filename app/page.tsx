@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../lib/auth";
+import { buttonClass } from "../lib/buttonStyles";
 import Logo from "../components/Logo";
 
 export default async function Home() {
@@ -33,13 +34,20 @@ export default async function Home() {
           </p>
           <Link
             href={session?.user ? "/events/new" : "/login?callbackUrl=/events/new"}
-            className="mt-8 inline-block rounded-full bg-amber px-6 py-3 font-medium text-white shadow-sm hover:brightness-105 transition"
+            className={buttonClass({ variant: "primary", size: "hero", className: "mt-8 inline-block shadow-sm" })}
           >
             + New event
           </Link>
           <Link
             href={session?.user ? "/events" : "/login?callbackUrl=/events"}
-            className="mt-8 ml-3 inline-block rounded-full border border-line px-6 py-3 font-medium text-ink/70 hover:border-ink transition"
+            // font-medium/text-ink/70 stay as extras: the neutral variant is
+            // colourless by default (matching its px-4 uses elsewhere), and
+            // this hero pairing wants the heavier treatment.
+            className={buttonClass({
+              variant: "neutral",
+              size: "hero",
+              className: "mt-8 ml-3 inline-block font-medium text-ink/70",
+            })}
           >
             Existing events
           </Link>

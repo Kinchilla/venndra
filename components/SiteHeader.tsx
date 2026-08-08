@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import Logo from "./Logo";
+import { buttonClass } from "../lib/buttonStyles";
 
 export default async function SiteHeader() {
   const session = await getServerSession(authOptions);
@@ -55,7 +56,7 @@ export default async function SiteHeader() {
           {session?.user ? (
             <Link
               href="/settings"
-              className="ml-2 flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm hover:border-ink transition-colors"
+              className={buttonClass({ variant: "neutral", size: "nav", className: "ml-2 flex items-center gap-2" })}
             >
               {session.user.image ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -66,7 +67,7 @@ export default async function SiteHeader() {
               {session.user.name?.split(" ")[0] ?? "Profile"}
             </Link>
           ) : (
-            <Link href="/login" className="rounded-full border border-line px-4 py-2 text-sm hover:border-ink transition-colors">
+            <Link href="/login" className={buttonClass({ variant: "neutral" })}>
               Sign in
             </Link>
           )}
@@ -89,7 +90,7 @@ function NavDropdown({
 }) {
   return (
     <div className="group relative">
-      <Link href={href} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-ink/70 hover:text-ink transition-colors">
+      <Link href={href} className={buttonClass({ variant: "nav", size: "nav", className: "flex items-center gap-1.5" })}>
         {label}
         {badge !== undefined && (
           <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber px-1 text-[10px] font-bold leading-none text-white">

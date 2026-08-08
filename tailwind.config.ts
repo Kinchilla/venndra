@@ -1,7 +1,13 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+  // lib/ is scanned because lib/buttonStyles.ts is where the shared button
+  // classes now live. Tailwind only generates utilities it can literally see in
+  // a scanned file, so leaving lib/ out silently dropped every class that
+  // wasn't also written somewhere under app/ or components/ -- px-5, py-2.5,
+  // py-1.5 and hover:brightness-105 all vanished, and the buttons using them
+  // rendered with no padding at all rather than erroring.
+  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {

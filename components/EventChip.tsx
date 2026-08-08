@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
+import { buttonClass } from "../lib/buttonStyles";
 
 type Participant = {
   email: string;
@@ -302,7 +303,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
               <button
                 onClick={handleDelete}
                 disabled={actionLoading !== null}
-                className="mt-3 rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+                className={buttonClass({ variant: "danger", className: "mt-3" })}
               >
                 {actionLoading === "cancel" ? "Deleting…" : "Delete"}
               </button>
@@ -310,14 +311,14 @@ export default function EventChip({ event }: { event: EventChipData }) {
 
             {event.status === "SEARCHING" && (
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={`/events/${event.id}`} className="inline-block rounded-full bg-amber px-4 py-2 text-sm font-medium text-white">
+                <Link href={`/events/${event.id}`} className={buttonClass({ variant: "primary", className: "inline-block" })}>
                   Pick a time
                 </Link>
                 {event.isOrganizer && (
                   <button
                     onClick={handleEdit}
                     disabled={actionLoading !== null}
-                    className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal disabled:opacity-50"
+                    className={buttonClass({ variant: "edit" })}
                   >
                     Edit this search
                   </button>
@@ -326,7 +327,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                   <button
                     onClick={handleOpenPicker}
                     disabled={actionLoading !== null}
-                    className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal disabled:opacity-50"
+                    className={buttonClass({ variant: "edit" })}
                   >
                     {actionLoading === "loadCandidates" ? "Loading…" : "Transfer organizer role"}
                   </button>
@@ -335,7 +336,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                   <button
                     onClick={handleCancel}
                     disabled={actionLoading !== null}
-                    className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+                    className={buttonClass({ variant: "danger" })}
                   >
                     {actionLoading === "cancel" ? "Cancelling…" : "Cancel this search"}
                   </button>
@@ -344,7 +345,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                   <button
                     onClick={handleLeave}
                     disabled={actionLoading !== null}
-                    className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+                    className={buttonClass({ variant: "danger" })}
                   >
                     {actionLoading === "leave" ? "Leaving…" : "Leave this event"}
                   </button>
@@ -369,7 +370,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                 <button
                   onClick={handleReschedule}
                   disabled={actionLoading !== null}
-                  className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal disabled:opacity-50"
+                  className={buttonClass({ variant: "edit" })}
                 >
                   {actionLoading === "reopen" ? "Reopening…" : "Reschedule"}
                 </button>
@@ -377,7 +378,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                   <button
                     onClick={handleOpenPicker}
                     disabled={actionLoading !== null}
-                    className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-teal hover:text-teal disabled:opacity-50"
+                    className={buttonClass({ variant: "edit" })}
                   >
                     {actionLoading === "loadCandidates" ? "Loading…" : "Transfer organizer role"}
                   </button>
@@ -385,7 +386,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                 <button
                   onClick={handleCancel}
                   disabled={actionLoading !== null}
-                  className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+                  className={buttonClass({ variant: "danger" })}
                 >
                   {actionLoading === "cancel" ? "Cancelling…" : "Cancel event"}
                 </button>
@@ -407,7 +408,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                 <button
                   onClick={handleLeave}
                   disabled={actionLoading !== null}
-                  className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+                  className={buttonClass({ variant: "danger" })}
                 >
                   {actionLoading === "leave" ? "Leaving…" : "Leave this event"}
                 </button>

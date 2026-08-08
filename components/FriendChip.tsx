@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { buttonClass } from "../lib/buttonStyles";
 
 type FriendUser = { id: string; name: string | null; email: string | null; image: string | null };
 
@@ -66,7 +67,7 @@ export default function FriendChip({
           <button
             onClick={handleRemove}
             disabled={loading !== null}
-            className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+            className={buttonClass({ variant: "danger" })}
           >
             {loading === "remove" ? "Removing…" : "Remove friend"}
           </button>
@@ -75,7 +76,7 @@ export default function FriendChip({
           <button
             onClick={() => act("cancel", `/api/friends/${friendshipId}`, "DELETE")}
             disabled={loading !== null}
-            className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+            className={buttonClass({ variant: "danger" })}
           >
             {loading === "cancel" ? "Cancelling…" : "Cancel request"}
           </button>
@@ -85,14 +86,14 @@ export default function FriendChip({
             <button
               onClick={handleAccept}
               disabled={loading !== null}
-              className="rounded-full bg-amber px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className={buttonClass({ variant: "primary" })}
             >
               {loading === "accept" ? "Accepting…" : "Accept"}
             </button>
             <button
               onClick={() => act("decline", `/api/friends/${friendshipId}`, "DELETE")}
               disabled={loading !== null}
-              className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink/70 hover:border-red-600 hover:text-red-600 disabled:opacity-50"
+              className={buttonClass({ variant: "danger" })}
             >
               {loading === "decline" ? "Declining…" : "Decline"}
             </button>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
+import { buttonClass } from "../lib/buttonStyles";
 
 type ParticipantStatus = "free" | "tentative" | "busy" | "unknown" | "error";
 type ParticipantAvailability = { email: string; name: string | null; status: ParticipantStatus };
@@ -482,23 +483,55 @@ function SlotGroup({
           />
         ))}
       </div>
-      {hiddenCount > 0 && (
-        <button
-          onClick={() => setExpandedList(true)}
-          className="mt-1.5 rounded-full border border-dashed border-line px-3 py-1.5 text-sm text-ink/50 hover:border-ink hover:text-ink transition-colors"
-        >
-          +{hiddenCount} more
-        </button>
-      )}
-      {expandedList && slots.length > VISIBLE_SLOTS_PER_GROUP && (
-        <button
-          onClick={() => setExpandedList(false)}
-          className="mt-1.5 ml-2 rounded-full px-3 py-1.5 text-sm text-ink/40 hover:text-ink transition-colors"
-        >
-          Show fewer
-        </button>
+      {/*
+        Both expand/collapse controls share one centred row. The wrapper is
+        rendered only when one of them exists, so an empty flex container can't
+        contribute its top margin and nudge the layout when neither applies.
+      */}
+      {(hiddenCount > 0 || (expandedList && slots.length > VISIBLE_SLOTS_PER_GROUP)) && (
+        <div className="mt-1.5 flex justify-center">
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => setExpandedList(true)}
+              className={buttonClass({ variant: "quiet", size: "nav", className: "inline-flex items-center gap-1.5" })}
+            >
+              +{hiddenCount} more
+              <Caret />
+            </button>
+          )}
+          {expandedList && slots.length > VISIBLE_SLOTS_PER_GROUP && (
+            <button
+              onClick={() => setExpandedList(false)}
+              className={buttonClass({ variant: "quiet", size: "nav", className: "inline-flex items-center gap-1.5" })}
+            >
+              Show fewer
+              <Caret up />
+            </button>
+          )}
+        </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The disclosure caret, shared by the slot chips and the expand/collapse
+ * controls under each group so every "there's more below" affordance in this
+ * view is literally the same mark. Points down by default and flips up when
+ * `up` is set; inherits colour from its parent, so it picks up the button's
+ * hover state for free.
+ */
+function Caret({ up = false, className = "" }: { up?: boolean; className?: string }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      className={`transition-transform ${up ? "rotate-180" : ""} ${className}`}
+      aria-hidden="true"
+    >
+      <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -580,15 +613,7 @@ function SlotRow({
           <span className="text-xs font-medium" style={{ color: border }}>
             {slot.availableCount}/{totalParticipants} free
           </span>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            className={`text-ink/40 transition-transform ${isOpen ? "rotate-180" : ""}`}
-            aria-hidden="true"
-          >
-            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <Caret up={isOpen} className="text-ink/40" />
         </span>
       </button>
 
@@ -639,7 +664,7 @@ function SlotRow({
                 <button
                   onClick={onConfirm}
                   disabled={confirming}
-                  className="rounded-full bg-amber px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  className={buttonClass({ variant: "primary" })}
                 >
                   {confirming ? "Locking in…" : "Choose this time"}
                 </button>

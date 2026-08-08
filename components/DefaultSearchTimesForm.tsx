@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import FiltersBuilder, { WeeklyHours } from "./FiltersBuilder";
+import { buttonClass } from "../lib/buttonStyles";
 
 export default function DefaultSearchTimesForm({ initialFilters }: { initialFilters: WeeklyHours | null }) {
   const [filters, setFilters] = useState<WeeklyHours>(initialFilters ?? {});
@@ -38,7 +39,7 @@ export default function DefaultSearchTimesForm({ initialFilters }: { initialFilt
           type="button"
           onClick={() => save(filters)}
           disabled={saving}
-          className="rounded-full bg-amber px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          className={buttonClass({ variant: "primary", size: "sm" })}
         >
           {saving ? "Saving…" : "Save default"}
         </button>
