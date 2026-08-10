@@ -7,6 +7,8 @@ import { buttonClass } from "../../lib/buttonStyles";
 import BackButton from "../../components/BackButton";
 import EventChip from "../../components/EventChip";
 import ClearSectionButton from "../../components/ClearSectionButton";
+import Paginated from "../../components/Paginated";
+import CountBadge from "../../components/CountBadge";
 
 export default async function EventsPage() {
   const session = await getServerSession(authOptions);
@@ -52,7 +54,7 @@ export default async function EventsPage() {
       </div>
 
       <EventSection title="Confirmed" events={confirmed} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} />
-      <EventSection title="Still deciding" events={inProgress} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} />
+      <EventSection title="Still deciding" events={inProgress} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} showCount />
       {past.length > 0 && (
         <EventSection title="Past" events={past} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} muted showClear />
       )}
@@ -71,6 +73,7 @@ function EventSection({
   writeProviderBySourceId,
   muted = false,
   showClear = false,
+  showCount = false,
 }: {
   title: string;
   events: any[];
@@ -79,46 +82,53 @@ function EventSection({
   writeProviderBySourceId: Map<string, string>;
   muted?: boolean;
   showClear?: boolean;
+  /** Repeats the header's Events badge beside the heading, so the number up there has a visible destination. */
+  showCount?: boolean;
 }) {
   const myEventIds = events.filter((e) => e.creatorId === userId).map((e) => e.id);
 
   return (
     <section className="mt-10">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold">{title}</h2>
+        <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+          {title}
+          {showCount && <CountBadge count={events.length} />}
+        </h2>
         {showClear && <ClearSectionButton eventIds={myEventIds} />}
       </div>
       <div className="mt-3 grid gap-2">
-        {events.map((e) => (
-          <div key={e.id} className={muted ? "opacity-60" : ""}>
-            <EventChip
-              event={{
-                id: e.id,
-                title: e.title,
-                organizerName: e.creatorId === userId ? "You" : e.creator.name ?? e.creator.email ?? "Someone",
-                isOrganizer: e.creatorId === userId,
-                creatorId: e.creatorId,
-                isPast: isPast(e),
-                status: e.status,
-                participants: e.participants.map((p: any) => ({
-                  email: p.email,
-                  userId: p.userId,
-                  status: p.status,
-                  name: p.user?.name ?? null,
-                })),
-                durationMin: e.durationMin,
-                searchStart: e.searchStart.toISOString(),
-                searchEnd: e.searchEnd.toISOString(),
-                filters: e.filters,
-                minAttendees: e.minAttendees,
-                confirmedStart: e.confirmedStart?.toISOString() ?? null,
-                confirmedEnd: e.confirmedEnd?.toISOString() ?? null,
-                writeCalendarProvider: e.writeCalendarSourceId ? writeProviderBySourceId.get(e.writeCalendarSourceId) ?? null : null,
-                writeError: e.writeError,
-              }}
-            />
-          </div>
-        ))}
+        <Paginated>
+          {events.map((e) => (
+            <div key={e.id} className={muted ? "opacity-60" : ""}>
+              <EventChip
+                event={{
+                  id: e.id,
+                  title: e.title,
+                  organizerName: e.creatorId === userId ? "You" : e.creator.name ?? e.creator.email ?? "Someone",
+                  isOrganizer: e.creatorId === userId,
+                  creatorId: e.creatorId,
+                  isPast: isPast(e),
+                  status: e.status,
+                  participants: e.participants.map((p: any) => ({
+                    email: p.email,
+                    userId: p.userId,
+                    status: p.status,
+                    name: p.user?.name ?? null,
+                  })),
+                  durationMin: e.durationMin,
+                  searchStart: e.searchStart.toISOString(),
+                  searchEnd: e.searchEnd.toISOString(),
+                  filters: e.filters,
+                  minAttendees: e.minAttendees,
+                  confirmedStart: e.confirmedStart?.toISOString() ?? null,
+                  confirmedEnd: e.confirmedEnd?.toISOString() ?? null,
+                  writeCalendarProvider: e.writeCalendarSourceId ? writeProviderBySourceId.get(e.writeCalendarSourceId) ?? null : null,
+                  writeError: e.writeError,
+                }}
+              />
+            </div>
+          ))}
+        </Paginated>
         {events.length === 0 && <p className="text-sm text-ink/50">Nothing here yet.</p>}
       </div>
     </section>

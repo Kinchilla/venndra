@@ -10,6 +10,13 @@ const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      // Mirrors the `body` rule in app/globals.css. Without this, `font-sans`
+      // is Tailwind's stock ui-sans-serif/system-ui stack -- i.e. NOT Inter --
+      // so "reset this back to the body font" would quietly land on a
+      // different typeface than everything around it.
+      fontFamily: {
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
       colors: {
         paper: "#FAF7F2",
         ink: "#231F20",

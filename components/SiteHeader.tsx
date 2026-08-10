@@ -3,15 +3,29 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import Logo from "./Logo";
+import CountBadge from "./CountBadge";
 import { buttonClass } from "../lib/buttonStyles";
 
 export default async function SiteHeader() {
   const session = await getServerSession(authOptions);
   const userId = session?.user ? (session.user as any).id : null;
 
-  const incomingCount = userId
-    ? await prisma.friendship.count({ where: { addresseeId: userId, status: "PENDING" } })
-    : 0;
+  // The friends badge clears itself (a request is accepted or declined and it's
+  // gone); the events one is deliberately a standing count rather than a
+  // "since you last looked" unread, so it keeps nagging until every search
+  // either locks in a time or is cancelled. It's the same set as the "Still
+  // deciding" section on /events, so the number always has somewhere to land.
+  const [incomingCount, searchingCount] = userId
+    ? await Promise.all([
+        prisma.friendship.count({ where: { addresseeId: userId, status: "PENDING" } }),
+        prisma.event.count({
+          where: {
+            status: "SEARCHING",
+            OR: [{ creatorId: userId }, { participants: { some: { email: session!.user!.email ?? "" } } }],
+          },
+        }),
+      ])
+    : [0, 0];
 
   return (
     <header className="border-b border-line/60 bg-paper/80 backdrop-blur-sm">
@@ -28,6 +42,7 @@ export default async function SiteHeader() {
               <NavDropdown
                 label="Events"
                 href="/events"
+                badge={searchingCount}
                 items={[
                   { label: "New event", href: "/events/new" },
                   { label: "Existing events", href: "/events" },
@@ -36,7 +51,7 @@ export default async function SiteHeader() {
               <NavDropdown
                 label="Friends"
                 href="/friends"
-                badge={incomingCount > 0 ? incomingCount : undefined}
+                badge={incomingCount}
                 items={[
                   { label: "Add friend", href: "/friends/new" },
                   { label: "Friends list", href: "/friends" },
@@ -92,11 +107,7 @@ function NavDropdown({
     <div className="group relative">
       <Link href={href} className={buttonClass({ variant: "nav", size: "nav", className: "flex items-center gap-1.5" })}>
         {label}
-        {badge !== undefined && (
-          <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber px-1 text-[10px] font-bold leading-none text-white">
-            {badge}
-          </span>
-        )}
+        <CountBadge count={badge ?? 0} />
       </Link>
       <div className="invisible absolute left-0 top-full -translate-y-1 pt-1 opacity-0 transition-all duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
         <div className="min-w-[160px] rounded-xl border border-line bg-white py-1.5 shadow-sm">

@@ -6,6 +6,7 @@ import { prisma } from "../../lib/prisma";
 import { buttonClass } from "../../lib/buttonStyles";
 import BackButton from "../../components/BackButton";
 import GroupChip from "../../components/GroupChip";
+import Paginated from "../../components/Paginated";
 
 export default async function GroupsPage() {
   const session = await getServerSession(authOptions);
@@ -37,19 +38,21 @@ export default async function GroupsPage() {
       </div>
 
       <div className="mt-8 grid gap-2">
-        {groups.map((g) => (
-          <GroupChip
-            key={g.id}
-            id={g.id}
-            name={g.name}
-            members={g.emails.map((email) => ({
-              email,
-              name: byEmail.get(email)?.name ?? null,
-              image: byEmail.get(email)?.image ?? null,
-            }))}
-            filters={(g.defaultFilters as any) ?? {}}
-          />
-        ))}
+        <Paginated>
+          {groups.map((g) => (
+            <GroupChip
+              key={g.id}
+              id={g.id}
+              name={g.name}
+              members={g.emails.map((email) => ({
+                email,
+                name: byEmail.get(email)?.name ?? null,
+                image: byEmail.get(email)?.image ?? null,
+              }))}
+              filters={(g.defaultFilters as any) ?? {}}
+            />
+          ))}
+        </Paginated>
         {groups.length === 0 && <p className="text-sm text-ink/50">No saved groups yet.</p>}
       </div>
     </main>

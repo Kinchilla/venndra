@@ -6,6 +6,7 @@ import { prisma } from "../../lib/prisma";
 import { buttonClass } from "../../lib/buttonStyles";
 import BackButton from "../../components/BackButton";
 import FriendChip from "../../components/FriendChip";
+import Paginated from "../../components/Paginated";
 
 export default async function FriendsPage() {
   const session = await getServerSession(authOptions);
@@ -60,9 +61,11 @@ function FriendSection({
     <section className="mt-10">
       <h2 className="font-display text-lg font-semibold">{title}</h2>
       <div className="mt-3 grid gap-2">
-        {entries.map((e) => (
-          <FriendChip key={e.id} friendshipId={e.id} user={e.user} kind={kind} />
-        ))}
+        <Paginated>
+          {entries.map((e) => (
+            <FriendChip key={e.id} friendshipId={e.id} user={e.user} kind={kind} />
+          ))}
+        </Paginated>
         {entries.length === 0 && <p className="text-sm text-ink/50">Nothing here yet.</p>}
       </div>
     </section>
