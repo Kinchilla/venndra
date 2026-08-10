@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { upcomingConfirmedWhere } from "../../../../../lib/eventLifecycle";
-import { findIdentityCalendarId } from "../../../../../lib/identityAccount";
 
 /**
  * Disconnect a connected calendar: the ConnectedCalendar row and its
@@ -11,25 +10,40 @@ import { findIdentityCalendarId } from "../../../../../lib/identityAccount";
  *
  * For an OAuth account this deletes the NextAuth Account row too, which is what
  * releases that provider account so a different Venndra user could later link
- * it. The identity account is exempt -- see below.
+ * it.
  *
  * A NextAuth Account row is simultaneously a sign-in credential and the token
  * source ConnectedCalendar.nextAuthAccountId reads calendars through, so
- * removing one always has a sign-in consequence. Which consequence depends
- * entirely on whether its address is the user's identity email:
+ * removing one always has a sign-in consequence. Since magic-link sign-in
+ * exists, that consequence is survivable for almost everyone: the user's email
+ * address is itself a way in, so giving up an OAuth account costs them a
+ * shortcut, not their account. Deleting it also genuinely releases the
+ * provider account -- signing in with it afterwards starts a separate new
+ * Venndra account, which is the correct meaning of "no longer associated with
+ * anyone."
  *
- *   - IDENTITY account (accountEmail === User.email). Deleting it would leave a
- *     Venndra account whose own email address can no longer sign into it:
- *     signed out, NextAuth finds a user with that email and throws
- *     AccountNotLinkedError rather than letting them in. There's no recovery
- *     from inside the app either, because User.email is immutable -- nothing in
- *     the codebase updates it after signup (see app/api/me, which only accepts
- *     name/timezone/defaultSearchFilters). Friends would also still be inviting
- *     them at that address, since participant matching keys on User.email. So
- *     this one is permanently exempt.
- *   - ANY OTHER linked account. Deleting it genuinely releases the account:
- *     signing in with it afterwards creates a separate new Venndra account,
- *     which is the correct meaning of "no longer associated with anyone."
+ * The one exception is a user with no email on file at all (User.email is
+ * nullable; some Microsoft work accounts return no email claim), for whom an
+ * Account row really is the only credential. See the guard below.
+ *
+ * ---
+ *
+ * WHAT MAY BE DISCONNECTED IS DECIDED IN THREE PLACES. This route is the only
+ * one that enforces anything; the other two exist so the UI doesn't offer a
+ * button the server will refuse, or refuse one without saying why. Change the
+ * rule here and both of the others need the same change, or they drift:
+ *
+ *   1. HERE -- the actual check. The only one that matters for correctness,
+ *      since the other two are client-visible and therefore advisory.
+ *   2. The GET in ../route.ts, which precomputes `disconnectBlockedReason`
+ *      per account. It deliberately mirrors this route's guard ORDER as well
+ *      as its conditions, so the tooltip names the reason a real DELETE would
+ *      actually fail on rather than some other one that also applies.
+ *   3. components/ConnectedAccountsSection.tsx, which doesn't re-derive the
+ *      rules but does describe their consequences in prose -- the confirm
+ *      dialog and the footer note under the list. Copy is where this last
+ *      went stale: both still claimed the sign-in account could never be
+ *      disconnected after that stopped being true.
  */
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -54,27 +68,33 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   if (calendar.nextAuthAccountId) {
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
 
-    // Checked before anything else: absolute, not a "not right now" condition
-    // the user could clear by rearranging their other accounts.
-    const identityCalendarId = await findIdentityCalendarId(userId, user?.email ?? null);
-    if (calendar.id === identityCalendarId) {
-      return NextResponse.json(
-        { error: "This is the account you sign into Venndra with, so it can't be disconnected." },
-        { status: 400 }
-      );
-    }
-
-    // Backstop for the case the identity rule can't see: accountEmail is
-    // nullable (some Microsoft work accounts return no email claim), so a user
-    // whose linked accounts all have null emails would match nothing above and
-    // could otherwise delete every credential they own. Removing the last one
-    // is never allowed regardless of which rule got us here.
-    const accountCount = await prisma.account.count({ where: { userId } });
-    if (accountCount <= 1) {
-      return NextResponse.json(
-        { error: "This is the only account you can sign in with — connect another one before disconnecting this." },
-        { status: 400 }
-      );
+    // Magic-link sign-in reopened this question. Both of the rules that used
+    // to live here -- the identity account is permanently exempt, and the last
+    // Account row can never go -- existed for one reason: an OAuth Account was
+    // the ONLY way back into a Venndra account, so deleting the wrong one
+    // locked the owner out for good with no in-app recovery.
+    //
+    // That premise is gone. NextAuth's email branch matches on User.email
+    // alone, whatever created the account (see the linking note in
+    // lib/auth.ts), so anyone with an address on file can always sign in with
+    // a magic link no matter what happens to their OAuth accounts. Keeping the
+    // old guards would now mean telling a magic-link user that a Google
+    // account "is the account you sign into Venndra with" -- which isn't true
+    // -- and permanently trapping an email-only user in the first OAuth
+    // calendar they ever connected.
+    //
+    // What survives is the case where email genuinely isn't a way in:
+    // User.email is nullable, and some Microsoft work accounts return no email
+    // claim at all. For those users an Account row really is the last
+    // credential, and the old rule still applies.
+    if (!user?.email) {
+      const accountCount = await prisma.account.count({ where: { userId } });
+      if (accountCount <= 1) {
+        return NextResponse.json(
+          { error: "This is the only account you can sign in with — connect another one before disconnecting this." },
+          { status: 400 }
+        );
+      }
     }
   }
 

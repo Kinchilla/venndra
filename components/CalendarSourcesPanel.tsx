@@ -18,11 +18,27 @@ const PROVIDER_LABEL: Record<string, string> = { GOOGLE: "Google", MICROSOFT: "M
 
 export default function CalendarSourcesPanel() {
   const [calendars, setCalendars] = useState<CalendarAccount[] | null>(null);
+  // Tracked separately from `calendars === null`, which only covers the very
+  // first load. A RE-load keeps the previous list on screen, and with
+  // ?sync=1 round-tripping to every connected provider that can take several
+  // seconds -- during which the panel used to render whatever it last knew
+  // with no sign anything was happening. For someone connecting their first
+  // calendar the last known state is the empty list, so the panel sat there
+  // saying "No calendars connected yet" while the calendar they had just
+  // connected was being discovered. That reads as a failed connect, not a
+  // slow one.
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback((sync = false) => {
+    setRefreshing(true);
     fetch(`/api/calendars${sync ? "?sync=1" : ""}`)
       .then((r) => r.json())
-      .then((d) => setCalendars(d.calendars ?? []));
+      .then((d) => setCalendars(d.calendars ?? []))
+      // Leaves the previous list alone on failure rather than blanking it --
+      // but the flag has to clear either way, or a dropped request would
+      // leave the panel claiming to be busy forever.
+      .catch(() => {})
+      .finally(() => setRefreshing(false));
   }, []);
 
   useEffect(() => {
@@ -101,10 +117,25 @@ export default function CalendarSourcesPanel() {
 
   const rows: Row[] = calendars.flatMap((account) => account.sources.map((source) => ({ source, account })));
 
-  if (rows.length === 0) return <p className="text-sm text-ink/50">No calendars connected yet.</p>;
+  // "None" and "none yet, still looking" are different answers, and only one
+  // of them means something went wrong. Apple in particular has no calendars
+  // to show until CalDAV discovery finishes, so this is the normal path
+  // straight after connecting iCloud rather than an edge case.
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-ink/50">
+        {refreshing ? "Looking for your calendars…" : "No calendars connected yet."}
+      </p>
+    );
+  }
 
   return (
     <div>
+      {/* The list stays interactive while this shows: the toggles below write
+          through their own PATCH calls and don't depend on the refetch, so
+          disabling them would cost more than the stale-by-a-few-seconds risk
+          of leaving them alone. This is a progress note, not a blocker. */}
+      {refreshing && <p className="mb-2 text-xs text-ink/40">Checking your calendars for updates…</p>}
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-line text-left text-xs font-normal text-ink/50">

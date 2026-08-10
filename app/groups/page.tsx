@@ -7,6 +7,7 @@ import { buttonClass } from "../../lib/buttonStyles";
 import BackButton from "../../components/BackButton";
 import GroupChip from "../../components/GroupChip";
 import Paginated from "../../components/Paginated";
+import ConnectCalendarBanner from "../../components/ConnectCalendarBanner";
 
 export default async function GroupsPage() {
   const session = await getServerSession(authOptions);
@@ -36,6 +37,8 @@ export default async function GroupsPage() {
           + New group
         </Link>
       </div>
+
+      <ConnectCalendarBanner />
 
       <div className="mt-8 grid gap-2">
         <Paginated>

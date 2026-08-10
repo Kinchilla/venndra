@@ -27,6 +27,14 @@ const PROVIDER_LABEL: Record<string, string> = { GOOGLE: "Google", MICROSOFT: "M
  * did when this was a reversible toggle: it names what reconnecting will cost
  * (a fresh authorization, or re-entering an app-specific password) rather than
  * letting the user discover that afterward.
+ *
+ * This file describes the disconnect rules in prose without re-deriving them,
+ * which makes it the easiest of the three places holding them to leave behind
+ * -- nothing breaks or fails to compile when the copy goes stale, it just
+ * starts lying. It has already happened once: this dialog and the footer note
+ * below both promised the sign-in account could never be disconnected, well
+ * after magic-link sign-in made that false. If a rule changes in the DELETE at
+ * app/api/calendars/accounts/[id]/route.ts, re-read the wording here too.
  */
 function disconnectConfirmText(account: Account) {
   const name = account.accountEmail ?? account.label;
@@ -35,14 +43,16 @@ function disconnectConfirmText(account: Account) {
     ? " New events are currently saved to this account -- Venndra will move that to another connected calendar."
     : "";
 
-  // Only accounts that AREN'T the identity one can reach this dialog, so the
-  // OAuth wording can state the release plainly: signing in with it afterwards
-  // starts a separate Venndra account, which is surprising enough to say up
-  // front rather than let someone discover it. Apple's credential lives on the
-  // row being deleted, hence the note about needing a freshly generated
-  // password rather than the old one.
+  // The OAuth wording states the release plainly: signing in with the account
+  // afterwards starts a separate Venndra account, which is surprising enough
+  // to say up front rather than let someone discover it. It also has to answer
+  // "then how do I get back in?", because since magic-link sign-in arrived
+  // this dialog can be reached for the very account the user originally
+  // signed up with -- see the guard in app/api/calendars/accounts/[id]. Apple
+  // has no Account row and no sign-in role at all; its credential lives on the
+  // row being deleted, hence the note about generating a fresh password.
   const reconnectNote = account.isLoginMethod
-    ? "Venndra will forget this account entirely -- reconnecting means authorizing it again, and signing in with it instead would start a separate Venndra account. The account you normally sign in with is unaffected."
+    ? "Venndra will forget this account entirely -- reconnecting means authorizing it again, and signing in with it instead would start a separate Venndra account. You'll still be able to sign in with an email link to your Venndra address."
     : "Venndra will forget this account entirely, including its stored app-specific password, so reconnecting means entering a new one.";
 
   return `Disconnect ${name}? Its calendars will stop counting toward your availability.${writeTargetNote} ${reconnectNote}`;
@@ -144,9 +154,9 @@ export default function ConnectedAccountsSection() {
         ))}
       </ul>
       <p className="mt-3 text-xs text-ink/40">
-        The account you sign into Venndra with can't be disconnected — it's how Venndra knows who you are. Any other
-        account can be: disconnecting removes it completely, so reconnecting means authorizing again (or, for iCloud,
-        generating a new app-specific password).
+        Disconnecting removes an account completely, so reconnecting means authorizing again (or, for iCloud,
+        generating a new app-specific password). You can disconnect one you sign in with — you&apos;ll still be able to
+        sign in with an email link to your Venndra address.
       </p>
     </div>
   );

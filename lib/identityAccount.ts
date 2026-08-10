@@ -1,8 +1,23 @@
 import { prisma } from "./prisma";
 
 /**
- * Which connected calendar represents the account this Venndra user IS -- the
- * one that can never be disconnected.
+ * CURRENTLY UNUSED, AND KEPT ON PURPOSE. Not dead code to tidy away.
+ *
+ * This backed the old rule that the OAuth account a user signed up with could
+ * never be disconnected. Magic-link sign-in retired that rule: an email
+ * address is itself a way back in, so no OAuth account is load-bearing for
+ * sign-in any more, and both callers (the GET and DELETE handlers under
+ * app/api/calendars/accounts) now gate on `!user?.email` instead.
+ *
+ * It stays because that decision is reversible -- if locking the identity
+ * account back down turns out to be the right call, this is the piece that
+ * would be needed again, and its reasoning below is the expensive part to
+ * reconstruct. Delete it once the looser rule has been in place long enough
+ * to be settled.
+ *
+ * ---
+ *
+ * Which connected calendar represents the account this Venndra user IS.
  *
  * Identified by email AND recency, not email alone. Matching on email alone
  * looked right until someone linked a Microsoft account using the same address

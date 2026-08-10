@@ -9,6 +9,7 @@ import EventChip from "../../components/EventChip";
 import ClearSectionButton from "../../components/ClearSectionButton";
 import Paginated from "../../components/Paginated";
 import CountBadge from "../../components/CountBadge";
+import ConnectCalendarBanner from "../../components/ConnectCalendarBanner";
 
 export default async function EventsPage() {
   const session = await getServerSession(authOptions);
@@ -52,6 +53,8 @@ export default async function EventsPage() {
           + New event
         </Link>
       </div>
+
+      <ConnectCalendarBanner />
 
       <EventSection title="Confirmed" events={confirmed} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} />
       <EventSection title="Still deciding" events={inProgress} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} showCount />

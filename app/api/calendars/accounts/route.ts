@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { upcomingConfirmedWhere } from "../../../../lib/eventLifecycle";
-import { findIdentityCalendarId } from "../../../../lib/identityAccount";
 
 /**
  * Lists every connected account -- Google, Microsoft and Apple/iCloud -- for
@@ -12,6 +11,11 @@ import { findIdentityCalendarId } from "../../../../lib/identityAccount";
  * Each row carries its own `disconnectBlockedReason`, computed here rather than
  * re-derived in the UI, so the tooltip, the disabled state and the error the
  * DELETE route would actually return can't drift apart. Null means allowed.
+ *
+ * This is a MIRROR, not the rule. Disconnection is enforced by the DELETE in
+ * ./[id]/route.ts, which is also where the reasoning lives and which lists the
+ * three places (this one included) that have to change together. Nothing here
+ * is a security boundary -- a caller can always just send the DELETE.
  */
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -35,11 +39,13 @@ export async function GET() {
 
   const enabledCount = await prisma.connectedCalendar.count({ where: { userId, isEnabled: true } });
 
-  // The identity email -- the one address that IS this Venndra account, fixed
-  // at signup and never editable afterwards. The linked account bearing it is
-  // exempt from disconnection; see the DELETE route for why.
+  // Whether this user could sign in with a magic link if every OAuth account
+  // went away -- true for anyone with an email address on file, since
+  // NextAuth's email branch matches on User.email alone. When it's true, no
+  // OAuth account is load-bearing for sign-in and the credential guard below
+  // doesn't apply. See the DELETE route for the full reasoning.
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
-  const identityCalendarId = await findIdentityCalendarId(userId, user?.email ?? null);
+  const canSignInWithEmail = !!user?.email;
   const accountCount = await prisma.account.count({ where: { userId } });
 
   const allSourceIds = calendars.flatMap((c) => c.sources.map((s) => s.id));
@@ -67,12 +73,8 @@ export async function GET() {
 
     // Mirrors the DELETE route's guard order exactly, so the tooltip always
     // names the reason the request would actually fail on.
-    const isIdentityAccount = c.id === identityCalendarId;
-
     let disconnectBlockedReason: string | null = null;
-    if (isIdentityAccount) {
-      disconnectBlockedReason = "This is the account you sign into Venndra with, so it can't be disconnected.";
-    } else if (c.nextAuthAccountId && accountCount <= 1) {
+    if (c.nextAuthAccountId && !canSignInWithEmail && accountCount <= 1) {
       disconnectBlockedReason = "This is the only account you can sign in with — connect another one first.";
     } else if (enabledCount <= 1) {
       disconnectBlockedReason = "This is your only connected calendar — connect another one first.";

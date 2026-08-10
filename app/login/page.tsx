@@ -13,6 +13,8 @@ export default function LoginPage() {
   const callbackUrl = params.get("callbackUrl") ?? "/events";
   const error = params.get("error");
   const [signedOutError, setSignedOutError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (!error || status === "loading") return;
@@ -62,9 +64,55 @@ export default function LoginPage() {
         </button>
       </div>
 
+      <div className="mt-6 flex items-center gap-3">
+        <span className="h-px flex-1 bg-line" />
+        <span className="font-mono-tight text-xs uppercase tracking-widest text-ink/40">or</span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+
+      {/* Email sign-in exists mainly for people whose only calendar is iCloud:
+          Apple connects over CalDAV, which is a calendar connection and not a
+          sign-in method, so before this they had no way to have an account at
+          all. It doubles as a way back in for anyone who'd rather not use an
+          OAuth button -- signing in by email reaches the SAME account as the
+          Google or Microsoft one at that address, never a duplicate. */}
+      <form
+        className="mt-6"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (sending) return;
+          setSending(true);
+          // Sends the link and navigates to pages.verifyRequest on success, or
+          // back here with ?error= if the send failed. Either way this page is
+          // gone, so `sending` is never reset -- it only has to survive long
+          // enough to stop a second submit.
+          await signIn("email", { email: email.trim(), callbackUrl });
+        }}
+      >
+        <label htmlFor="email" className="text-sm text-ink/70">
+          Sign in with your email address
+        </label>
+        <input
+          id="email"
+          type="email"
+          required
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="mt-2 w-full rounded-full border border-line bg-white px-5 py-3 text-sm outline-none focus:border-ink"
+        />
+        <button
+          type="submit"
+          disabled={sending || !email.trim()}
+          className={buttonClass({ variant: "primary", size: "xl", className: "mt-3 w-full" })}
+        >
+          {sending ? "Sending…" : "Email me a sign-in link"}
+        </button>
+      </form>
+
       <p className="mt-6 text-xs text-ink/50">
-        Have an iCloud calendar? You can connect it from your dashboard after
-        signing in with Google or Microsoft first.
+        Only use an iCloud calendar? Sign in with your email address above, then connect it from Settings.
       </p>
     </main>
   );

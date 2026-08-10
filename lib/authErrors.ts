@@ -36,6 +36,14 @@ export function connectErrorMessage(code: string): string {
       return `That account signed in successfully, but Venndra couldn't finish saving the connection. This is a problem on Venndra's side, not with your account. (${code})`;
     case "Configuration":
       return `Venndra's connection to that provider isn't configured correctly, so the request couldn't be completed. (${code})`;
+    // Not a "connect another account" failure at all -- it lands here because
+    // /login bounces every error code to Settings once you're signed in, and
+    // these two are the magic-link codes. Reachable by clicking a stale
+    // sign-in link from your inbox while already signed in, where the useful
+    // thing to say is that nothing is wrong.
+    case "Verification":
+    case "EmailSignin":
+      return "That sign-in link has expired or was already used — but you're already signed in, so there's nothing to do.";
     default:
       return `Couldn't connect that account. (${code})`;
   }
@@ -45,9 +53,27 @@ export function connectErrorMessage(code: string): string {
 export function signInErrorMessage(code: string): string {
   switch (code) {
     case "OAuthAccountNotLinked":
-      return "That account is already linked to a different Venndra account. Sign in with the Google or Microsoft account you originally used instead.";
+      // Thrown by callback-handler when an account already exists under this
+      // provider's email address and the provider isn't set to auto-link.
+      // The email route out is offered first because it always works and
+      // needs nothing set up: a magic link to that same address reaches the
+      // existing account directly (NextAuth's email branch matches on email
+      // regardless of how the account was created), and this provider can
+      // then be attached for good from Settings.
+      return "An account already exists for that email address. Sign in with the email link below and you'll land in it — you can then connect this Google or Microsoft account from Settings, and sign in with it directly from then on.";
     case "AccessDenied":
       return "You didn't grant Venndra the access it needs to sign you in. If this is a work or school account, an administrator may have to approve Venndra first.";
+    // The email provider's send step failed. Covers a genuinely broken send
+    // and a tripped rate limit alike -- lib/magicLink.ts throws for both and
+    // NextAuth collapses them into this one code. Waiting is the right advice
+    // either way, and distinguishing them would tell an anonymous caller
+    // whether they'd hit a limit.
+    case "EmailSignin":
+      return "Couldn't send that sign-in link just now. If you've asked for a few in a row, wait a minute and try again.";
+    // The token in a clicked link was missing, already used, or past its
+    // 15-minute expiry.
+    case "Verification":
+      return "That sign-in link has expired or was already used. Request a fresh one below.";
     default:
       return `Couldn't sign you in. Try again, or use a different account. (${code})`;
   }
