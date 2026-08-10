@@ -57,7 +57,12 @@ const VARIANTS: Record<ButtonVariant, string> = {
   edit: "border border-line font-medium text-ink/70 hover:border-teal hover:text-teal active:border-teal active:bg-teal active:text-white disabled:opacity-50",
   danger:
     "border border-line font-medium text-ink/70 hover:border-red-600 hover:text-red-600 active:border-red-600 active:bg-red-600 active:text-white disabled:opacity-50",
-  neutral: "border border-line hover:border-ink active:border-ink active:bg-ink active:text-white disabled:opacity-50",
+  // Teal rather than ink, so a press answers in the site's own colour instead
+  // of a flat black that belonged to no part of the identity. It stays
+  // distinct from `edit` by tinting only its border on hover and leaving the
+  // label alone -- `edit` colours the text too, which is what marks it as
+  // pointing somewhere rather than just being pressable.
+  neutral: "border border-line hover:border-teal active:border-teal active:bg-teal active:text-white disabled:opacity-50",
   // Borderless variants get a wash rather than a solid fill -- a full block of
   // colour on a control with no outline reads as much heavier than the others.
   quiet: "text-ink/60 hover:text-ink active:bg-ink/10 active:text-ink disabled:opacity-50",

@@ -336,21 +336,21 @@ export default function EventResults({
           <div className="flex rounded-full border border-line p-0.5">
             <button
               onClick={() => setSortMode("headcount")}
-              className={`rounded-full px-2.5 py-1 ${sortMode === "headcount" ? "bg-ink text-white" : ""}`}
+              className={`rounded-full px-2.5 py-1 ${sortMode === "headcount" ? "bg-teal text-white" : ""}`}
             >
               who's free
             </button>
             {votingEnabled && (
               <button
                 onClick={() => setSortMode("votes")}
-                className={`rounded-full px-2.5 py-1 ${sortMode === "votes" ? "bg-ink text-white" : ""}`}
+                className={`rounded-full px-2.5 py-1 ${sortMode === "votes" ? "bg-teal text-white" : ""}`}
               >
                 most votes
               </button>
             )}
             <button
               onClick={() => setSortMode("time")}
-              className={`rounded-full px-2.5 py-1 ${sortMode === "time" ? "bg-ink text-white" : ""}`}
+              className={`rounded-full px-2.5 py-1 ${sortMode === "time" ? "bg-teal text-white" : ""}`}
             >
               earliest
             </button>
@@ -358,13 +358,13 @@ export default function EventResults({
           <div className="flex rounded-full border border-line p-0.5">
             <button
               onClick={() => changeTimeFormat("12h")}
-              className={`rounded-full px-2.5 py-1 ${timeFormat === "12h" ? "bg-ink text-white" : ""}`}
+              className={`rounded-full px-2.5 py-1 ${timeFormat === "12h" ? "bg-teal text-white" : ""}`}
             >
               12h
             </button>
             <button
               onClick={() => changeTimeFormat("24h")}
-              className={`rounded-full px-2.5 py-1 ${timeFormat === "24h" ? "bg-ink text-white" : ""}`}
+              className={`rounded-full px-2.5 py-1 ${timeFormat === "24h" ? "bg-teal text-white" : ""}`}
             >
               24h
             </button>
