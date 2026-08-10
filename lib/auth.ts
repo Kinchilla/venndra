@@ -77,6 +77,28 @@ const MS_SCOPES = [
  *   mailbox. Google's claim is trustworthy, but the two are kept symmetric so
  *   there's one rule here instead of a per-provider exception to remember.
  *
+ * The next thought after reading the above -- "fine, then let the provider
+ * make a SECOND account instead of erroring" -- is also deliberately not
+ * supported, and is a much bigger change than it sounds. It presents as a
+ * sign-in feature and is really a schema change: User.email is @unique
+ * (prisma/schema.prisma) because email is this app's identity key for people
+ * who don't have accounts yet. EventParticipant stores bare address strings,
+ * so a second user sharing an address makes several lookups ambiguous at once.
+ * lib/friends.ts's validateAllFriends resolves invitees with a findMany on
+ * email and would get a set where it expects one user. Worse,
+ * lib/participants.ts's syncParticipantStatusForUser updateManys on email
+ * alone, so whichever of the two accounts connected a calendar most recently
+ * would silently claim EVERY invitation sent to that address, including ones
+ * meant for the other. And magic link's getUserByEmail returns one row of two,
+ * non-deterministically. Supporting this means re-keying invitations off email
+ * first; the login flow is the cheap part.
+ *
+ * So two Venndra accounts need two addresses -- which already works today with
+ * no code at all, since a provider account whose address matches no existing
+ * user takes callback-handler's createUser branch and gets an independent
+ * account. The uniqueness of email isn't obstinacy: it's what makes "invite
+ * this address" have exactly one answer.
+ *
  * Neither direction weakens the existing Settings guard. "That account is
  * already claimed by a different Venndra account" comes from a separate check
  * (userByAccount.id !== user.id) that runs before any email lookup.
