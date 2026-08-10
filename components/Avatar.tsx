@@ -14,6 +14,41 @@ const sizes = {
   56: "h-14 w-14 text-xl",
 };
 
+// Tints of the site palette rather than arbitrary hues: amber and teal are
+// Venndra's own two accents, and the other four are picked to sit at roughly
+// the same lightness so no one person's avatar shouts louder than the rest of
+// the list. Every pair clears 4.5:1, which matters more here than usual --
+// initials render as small as 8px in the FriendPicker chips.
+//
+// These class names have to stay written out in full. Tailwind generates only
+// what it can literally see in a scanned file, so building them up (`bg-[${…}]`)
+// silently produces circles with no background at all.
+const tints = [
+  "bg-[#F2D8B0] text-[#74480F]", // amber
+  "bg-[#C6D7DF] text-[#234655]", // teal
+  "bg-[#F0CDBE] text-[#7F3E2A]", // clay
+  "bg-[#D2DDC5] text-[#47593A]", // sage
+  "bg-[#E4D2DC] text-[#6B4157]", // plum
+  "bg-[#D3D8E6] text-[#414A6B]", // slate
+];
+
+/**
+ * Keyed on the email rather than the name, for two reasons: the same person
+ * keeps the same colour everywhere they appear even where one view has their
+ * name and another only has the address, and editing your name on /settings
+ * doesn't make the circle change colour under you mid-keystroke.
+ *
+ * djb2, and deliberately not something like a random pick memoised per render:
+ * the header is a server component and the chips are client ones, so the same
+ * user gets hashed on both sides of the wire and the two answers have to agree
+ * or React reports a hydration mismatch.
+ */
+function tintFor(key: string) {
+  let hash = 5381;
+  for (let i = 0; i < key.length; i++) hash = ((hash << 5) + hash + key.charCodeAt(i)) | 0;
+  return tints[Math.abs(hash) % tints.length];
+}
+
 export function initialsFor(name: string | null | undefined, email: string | null | undefined) {
   const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
   if (words.length > 0) {
@@ -45,10 +80,16 @@ export default function Avatar({
     return <img src={image} alt="" referrerPolicy="no-referrer" className={`${shape} object-cover`} />;
   }
 
+  // An account with neither an email nor a name has no initial to show and
+  // nothing stable to hash, so it keeps the old neutral circle -- a coloured
+  // one would imply an identity that isn't there.
+  const key = (email ?? name ?? "").trim().toLowerCase();
+  const tint = key ? tintFor(key) : "bg-line text-ink/60";
+
   return (
     <span
       aria-hidden="true"
-      className={`${shape} inline-flex items-center justify-center bg-line font-medium leading-none text-ink/60`}
+      className={`${shape} ${tint} inline-flex items-center justify-center font-medium leading-none`}
     >
       {initialsFor(name, email)}
     </span>
