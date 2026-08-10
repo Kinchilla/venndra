@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WeeklyHours } from "./FiltersBuilder";
 import { buttonClass } from "../lib/buttonStyles";
+import Avatar from "./Avatar";
 
 type Member = { email: string; name: string | null; image: string | null };
 
@@ -65,12 +66,7 @@ export default function GroupChip({
               <div className="grid gap-2 sm:flex-1">
                 {members.map((m) => (
                   <div key={m.email} className="flex items-center gap-2.5">
-                    {m.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.image} alt="" referrerPolicy="no-referrer" className="h-6 w-6 rounded-full" />
-                    ) : (
-                      <span className="h-6 w-6 shrink-0 rounded-full bg-line" />
-                    )}
+                    <Avatar image={m.image} name={m.name} email={m.email} size={24} />
                     <span className="text-ink/70">{m.name ?? m.email}</span>
                   </div>
                 ))}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { buttonClass } from "../lib/buttonStyles";
+import Avatar from "./Avatar";
 
 type SuggestedUser = { id: string; name: string | null; email: string | null; image: string | null };
 
@@ -48,12 +49,7 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white px-4 py-3">
       <div className="flex items-center gap-2.5">
-        {user.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.image} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full" />
-        ) : (
-          <span className="h-8 w-8 shrink-0 rounded-full bg-line" />
-        )}
+        <Avatar image={user.image} name={user.name} email={user.email} size={32} />
         <div>
           <div className="text-sm font-medium">{displayName}</div>
           {user.name && <div className="text-xs text-ink/40">{user.email}</div>}

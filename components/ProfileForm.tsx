@@ -4,15 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
 import { buttonClass } from "../lib/buttonStyles";
+import Avatar from "./Avatar";
 
 export default function ProfileForm({
   initialName,
   initialTimezone,
   image,
+  email,
 }: {
   initialName: string;
   initialTimezone: string;
   image: string | null;
+  email: string | null;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -68,12 +71,9 @@ export default function ProfileForm({
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-line bg-white p-6">
       <div className="flex items-center gap-4">
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt="" referrerPolicy="no-referrer" className="h-14 w-14 rounded-full" />
-        ) : (
-          <div className="h-14 w-14 rounded-full bg-line" />
-        )}
+        {/* Deliberately the live `name` state rather than initialName, so the
+            initials track what's in the field as it's edited. */}
+        <Avatar image={image} name={name} email={email} size={56} />
         <p className="text-xs text-ink/40">
           Your picture comes from whichever account you signed in with — Venndra doesn't support uploading a
           separate one yet.

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../lib/auth";
 import { prisma } from "../lib/prisma";
+import Avatar from "./Avatar";
 import Logo from "./Logo";
 import CountBadge from "./CountBadge";
 import { buttonClass } from "../lib/buttonStyles";
@@ -73,12 +74,7 @@ export default async function SiteHeader() {
               href="/settings"
               className={buttonClass({ variant: "neutral", size: "nav", className: "ml-2 flex items-center gap-2" })}
             >
-              {session.user.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={session.user.image} alt="" referrerPolicy="no-referrer" className="h-6 w-6 rounded-full" />
-              ) : (
-                <span className="h-6 w-6 rounded-full bg-line" />
-              )}
+              <Avatar image={session.user.image} name={session.user.name} email={session.user.email} size={24} />
               {session.user.name?.split(" ")[0] ?? "Profile"}
             </Link>
           ) : (

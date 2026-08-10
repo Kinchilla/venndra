@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Avatar from "./Avatar";
 
 type Friend = { id: string; name: string | null; email: string | null; image: string | null };
 type CurrentUser = { email: string; name: string | null; image: string | null };
@@ -54,12 +55,7 @@ export default function FriendPicker({
           <div className="flex flex-wrap gap-1.5">
             {includesSelf && currentUser && (
               <span className="flex items-center gap-1.5 rounded-full bg-amber/10 px-2.5 py-1 text-xs text-amber">
-                {currentUser.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={currentUser.image} alt="" referrerPolicy="no-referrer" className="h-4 w-4 rounded-full" />
-                ) : (
-                  <span className="h-4 w-4 rounded-full bg-line" />
-                )}
+                <Avatar image={currentUser.image} name={currentUser.name} email={currentUser.email} size={16} />
                 Me{currentUser.name ? ` (${currentUser.name})` : ""}
                 <button type="button" onClick={() => onChange(emails.filter((e) => e !== currentUser.email))} aria-label="Remove yourself">
                   ×
@@ -68,12 +64,7 @@ export default function FriendPicker({
             )}
             {selectedFriends.map((f) => (
               <span key={f.email} className="flex items-center gap-1.5 rounded-full bg-teal/10 px-2.5 py-1 text-xs text-teal">
-                {f.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={f.image} alt="" referrerPolicy="no-referrer" className="h-4 w-4 rounded-full" />
-                ) : (
-                  <span className="h-4 w-4 rounded-full bg-line" />
-                )}
+                <Avatar image={f.image} name={f.name} email={f.email} size={16} />
                 {f.name ?? f.email}
                 <button type="button" onClick={() => onChange(emails.filter((e) => e !== f.email))} aria-label={`Remove ${f.name ?? f.email}`}>
                   ×
@@ -103,12 +94,7 @@ export default function FriendPicker({
                   }}
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-ink/80 hover:bg-paper"
                 >
-                  {f.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={f.image} alt="" referrerPolicy="no-referrer" className="h-5 w-5 rounded-full" />
-                  ) : (
-                    <span className="h-5 w-5 rounded-full bg-line" />
-                  )}
+                  <Avatar image={f.image} name={f.name} email={f.email} size={20} />
                   <span>{f.name ?? f.email}</span>
                 </button>
               </li>

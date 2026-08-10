@@ -74,7 +74,12 @@ export default async function SettingsPage({
       <section className="mt-8">
         <h2 className="font-display text-lg font-semibold">Profile</h2>
         <div className="mt-3">
-          <ProfileForm initialName={user.name ?? ""} initialTimezone={user.timezone} image={user.image} />
+          <ProfileForm
+            initialName={user.name ?? ""}
+            initialTimezone={user.timezone}
+            image={user.image}
+            email={user.email}
+          />
         </div>
       </section>
 
