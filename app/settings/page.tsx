@@ -8,7 +8,7 @@ import BackButton from "../../components/BackButton";
 import ProfileForm from "../../components/ProfileForm";
 import DefaultSearchTimesForm from "../../components/DefaultSearchTimesForm";
 import { WeeklyHours } from "../../components/FiltersBuilder";
-import ConnectedCalendarsSection from "../../components/ConnectedCalendarsSection";
+import CalendarSourcesPanel from "../../components/CalendarSourcesPanel";
 import ConnectedAccountsSection from "../../components/ConnectedAccountsSection";
 import LogoutButton from "../../components/LogoutButton";
 
@@ -93,14 +93,16 @@ export default async function SettingsPage({
         <p className="mt-1 text-sm text-ink/50">
           Pick which calendars count toward your availability, and which one new events get added to.
         </p>
-        <ConnectedCalendarsSection />
+        <div className="mt-3">
+          <CalendarSourcesPanel />
+        </div>
       </section>
 
       <section className="mt-10">
         <h2 className="font-display text-lg font-semibold">Connected accounts</h2>
         <p className="mt-1 text-sm text-ink/50">
-          The accounts Venndra reads calendars from. Any of them can be disconnected, which removes them from Venndra
-          entirely.
+          The accounts Venndra reads calendars from. Connect another below, or disconnect one, which removes it from
+          Venndra entirely.
         </p>
         <ConnectedAccountsSection />
       </section>

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Button from "./Button";
+import ConnectAppleForm from "./ConnectAppleForm";
+import ConnectProviderButton from "./ConnectProviderButton";
 import { CALENDARS_CHANGED_EVENT, dispatchCalendarsChanged } from "../lib/calendarEvents";
 
 type Account = {
@@ -112,52 +114,98 @@ export default function ConnectedAccountsSection() {
     dispatchCalendarsChanged({ disconnectedCalendarId: id });
   }
 
-  if (!accounts) return <p className="mt-3 text-sm text-ink/50">Loading accounts…</p>;
-  if (accounts.length === 0) return <p className="mt-3 text-sm text-ink/50">No accounts connected yet.</p>;
-
   return (
     <div className="mt-3">
       {error && (
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
-      <ul className="divide-y divide-line/60 border-y border-line/60">
-        {accounts.map((account) => (
-          <li key={account.id} className="flex items-center justify-between gap-4 py-3">
-            <div className="min-w-0">
-              <div className="truncate text-sm text-ink/80">{account.accountEmail ?? account.label}</div>
-              <div className="text-xs text-ink/40">
-                {PROVIDER_LABEL[account.provider] ?? account.provider}
-                {account.confirmedEventCount > 0 && (
-                  <>
-                    {" · holding "}
-                    {account.confirmedEventCount} upcoming event{account.confirmedEventCount === 1 ? "" : "s"}
-                  </>
-                )}
-              </div>
-            </div>
 
-            <Button
-              variant="danger"
-              confirm={() => disconnectConfirmText(account)}
-              onClick={() => disconnect(account.id)}
-              disabled={!!account.disconnectBlockedReason || pendingId === account.id}
-              title={account.disconnectBlockedReason ?? undefined}
-              // Disabled is a normal resting state for this button (only
-              // calendar, only login, or holding confirmed events), not a brief
-              // in-flight blip -- so it fades harder than the shared default
-              // and drops the hover affordance entirely.
-              className="shrink-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink/70"
-            >
-              {pendingId === account.id ? "Disconnecting…" : "Disconnect account"}
-            </Button>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-3 text-xs text-ink/40">
-        Disconnecting removes an account completely, so reconnecting means authorizing again (or, for iCloud,
-        generating a new app-specific password). You can disconnect one you sign in with — you&apos;ll still be able to
-        sign in with an email link to your Venndra address.
-      </p>
+      {/* The connect buttons below render in every state, so the two
+          placeholders stay placeholders -- someone with nothing connected yet
+          reads "No accounts connected yet" and has the fix directly under it,
+          rather than an early return that hides the only useful control on the
+          section. */}
+      {!accounts ? (
+        <p className="text-sm text-ink/50">Loading accounts…</p>
+      ) : accounts.length === 0 ? (
+        <p className="text-sm text-ink/50">No accounts connected yet.</p>
+      ) : (
+        <ul className="divide-y divide-line/60 border-y border-line/60">
+          {accounts.map((account) => (
+            <li key={account.id} className="flex items-center justify-between gap-4 py-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm text-ink/80">{account.accountEmail ?? account.label}</div>
+                <div className="text-xs text-ink/40">
+                  {PROVIDER_LABEL[account.provider] ?? account.provider}
+                  {account.confirmedEventCount > 0 && (
+                    <>
+                      {" · holding "}
+                      {account.confirmedEventCount} upcoming event{account.confirmedEventCount === 1 ? "" : "s"}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                variant="danger"
+                confirm={() => disconnectConfirmText(account)}
+                onClick={() => disconnect(account.id)}
+                disabled={!!account.disconnectBlockedReason || pendingId === account.id}
+                title={account.disconnectBlockedReason ?? undefined}
+                // Disabled is a normal resting state for this button (only
+                // calendar, only login, or holding confirmed events), not a brief
+                // in-flight blip -- so it fades harder than the shared default
+                // and drops the hover affordance entirely.
+                className="shrink-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink/70"
+              >
+                {pendingId === account.id ? "Disconnecting…" : "Disconnect account"}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/*
+        Both lists on this page load themselves on mount and don't re-fetch on
+        router.refresh() (that only re-renders server components -- these are
+        client components with their own state), so a successful connect has to
+        say so explicitly. CALENDARS_CHANGED_EVENT is that signal: this
+        component and CalendarSourcesPanel above both listen, so one dispatch
+        keeps the two in sync no matter which one initiated.
+
+        The Google/Microsoft buttons need no signal at all: those are a
+        full-page redirect out to the provider and back, so /settings
+        fresh-mounts on return and both lists load from scratch anyway. Only
+        Apple's form, which never leaves the page, has to announce itself.
+
+        The column stretches its children (no items-start), so all three come
+        out the width of the account list above and stack flush with its
+        edges -- the section reads as one block rather than a list with three
+        ragged offcuts under it. Their labels centre themselves: a <button>
+        centres its own text by default and nothing here overrides that.
+        Apple's form, which replaces its button in place when opened, gets the
+        same full width.
+      */}
+      <div className="mt-3 flex flex-col gap-2">
+        <ConnectProviderButton provider="google" />
+        <ConnectProviderButton provider="azure-ad" />
+        {/* No detail: a connect adds an account rather than removing one, so
+            there's nothing for listeners to drop optimistically. */}
+        <ConnectAppleForm onConnected={() => dispatchCalendarsChanged()} />
+      </div>
+
+      {/* Below the buttons, not directly under the list it describes: it's
+          disconnect fine print, and the two people it matters to (someone
+          hesitating over Disconnect, someone who just clicked it) will read it
+          either way, whereas the connect buttons are the thing a first-time
+          visitor is looking for and shouldn't have to read past. */}
+      {!!accounts?.length && (
+        <p className="mt-3 text-xs text-ink/40">
+          Disconnecting removes an account completely, so reconnecting means authorizing again (or, for iCloud,
+          generating a new app-specific password). You can disconnect one you sign in with — you&apos;ll still be able
+          to sign in with an email link to your Venndra address.
+        </p>
+      )}
     </div>
   );
 }
