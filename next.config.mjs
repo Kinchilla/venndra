@@ -14,5 +14,41 @@ const nextConfig = {
       dynamic: 0,
     },
   },
+
+  async redirects() {
+    return [
+      // Send the Vercel-assigned domain to the real one, so venndra.app is the
+      // only host that ever serves the app in production.
+      //
+      // This isn't cosmetic. next-auth v4 derives its base URL from the
+      // incoming request host whenever process.env.VERCEL is set -- see
+      // detectOrigin in next-auth/utils/detect-origin.js, which ignores
+      // NEXTAUTH_URL entirely on Vercel. So whichever hostname you arrive on
+      // becomes the hostname in your magic links, your OAuth redirect_uri, and
+      // the scope of your session cookie. Two reachable hosts therefore means
+      // two parallel logged-in identities, and a permanent obligation to keep
+      // *.vercel.app callback URLs registered with Google and Microsoft. One
+      // host removes all of that.
+      //
+      // Matched on the exact vercel.app hostname rather than "any host that
+      // isn't venndra.app". Preview deployments get their own unique
+      // hostnames (venndra-git-<branch>-<team>.vercel.app), and a catch-all
+      // would redirect every one of them to production -- which is precisely
+      // why next-auth reads the request host in the first place. Naming the
+      // one production alias leaves previews working.
+      //
+      // Deliberately NOT permanent: `permanent: true` emits a 308, which
+      // browsers cache more or less forever, so undoing it wouldn't reach
+      // anyone who had already been redirected once. 307 stays reversible.
+      // Worth promoting to permanent later, once this has proven itself and
+      // the SEO consolidation is worth the one-way door.
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "venndra.vercel.app" }],
+        destination: "https://venndra.app/:path*",
+        permanent: false,
+      },
+    ];
+  },
 };
 export default nextConfig;
