@@ -52,6 +52,12 @@ export function magicLinkProvider(): EmailConfig {
     // shared or already-compromised device. Short enough to be annoying only
     // if someone leaves the tab for a quarter of an hour, and requesting
     // another is one click.
+    //
+    // This number carries more weight than it used to. Links are no longer
+    // single use -- authAdapter.ts stopped consuming them, because the one use
+    // was routinely being spent by a link scanner or an in-app webview instead
+    // of by the person signing in -- so the window is now the only thing
+    // bounding how long a link stays live. Lengthen it with that in mind.
     maxAge: LINK_MAX_AGE_SECONDS,
 
     // Required by NextAuth's EmailConfig type, and never read: `server` is
@@ -95,7 +101,7 @@ function text(url: string): string {
   return [
     "Sign in to Venndra",
     "",
-    `Open this link to sign in. It expires in ${MINUTES} minutes and can only be used once:`,
+    `Open this link to sign in. It expires in ${MINUTES} minutes:`,
     url,
     "",
     "If you didn't ask to sign in, you can ignore this email — nobody can get into your account without this link.",
@@ -119,7 +125,7 @@ function html(url: string): string {
           </tr>
           <tr>
             <td style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:22px;color:#231F20;opacity:0.7;padding-bottom:24px;">
-              Click the button below to sign in. This link expires in ${MINUTES} minutes and can only be used once.
+              Click the button below to sign in. This link expires in ${MINUTES} minutes.
             </td>
           </tr>
           <tr>
