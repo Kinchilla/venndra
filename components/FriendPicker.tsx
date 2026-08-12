@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Avatar from "./Avatar";
+import { PAUSED_TAG, pausedInviteeMessage } from "../lib/pause";
 
-type Friend = { id: string; name: string | null; email: string | null; image: string | null };
+type Friend = { id: string; name: string | null; email: string | null; image: string | null; paused: boolean };
 type CurrentUser = { email: string; name: string | null; image: string | null };
 
 export default function FriendPicker({
@@ -12,11 +13,21 @@ export default function FriendPicker({
   onChange,
   currentUser,
   onPendingTextChange,
+  onPausedSelectionChange,
 }: {
   emails: string[];
   onChange: (emails: string[]) => void;
   currentUser?: CurrentUser | null;
   onPendingTextChange?: (hasPendingText: boolean) => void;
+  /**
+   * Fires when someone already in the list turns out to be paused -- which
+   * this picker can't prevent, only report: a saved group applied above, a
+   * fromEvent prefill, or a restored draft can all put a person here who
+   * paused since. Optional, and deliberately unused by the saved-group form:
+   * see the note on validateNoPausedInvitees in lib/friends.ts for why a
+   * group tolerates a paused member and a new event doesn't.
+   */
+  onPausedSelectionChange?: (hasPausedSelection: boolean) => void;
 }) {
   const [friends, setFriends] = useState<Friend[] | null>(null);
   const [query, setQuery] = useState("");
@@ -48,6 +59,15 @@ export default function FriendPicker({
   const selectedFriends = (friends ?? []).filter((f) => f.email && emails.includes(f.email));
   const includesSelf = !!currentUser && emails.includes(currentUser.email);
 
+  // Anyone in the list who has since paused. Reported upward so the form can
+  // refuse to submit, and named below so the fix ("take them out") is
+  // obvious rather than something to deduce from a rejected submission.
+  const pausedSelected = selectedFriends.filter((f) => f.paused);
+  useEffect(() => {
+    onPausedSelectionChange?.(pausedSelected.length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pausedSelected.length]);
+
   return (
     <div>
       <div className="relative">
@@ -63,9 +83,22 @@ export default function FriendPicker({
               </span>
             )}
             {selectedFriends.map((f) => (
-              <span key={f.email} className="flex items-center gap-1.5 rounded-full bg-teal/10 px-2.5 py-1 text-xs text-teal">
-                <Avatar image={f.image} name={f.name} email={f.email} size={16} />
+              // A paused chip drops the teal and says so, rather than sitting
+              // there looking like every other guest until the form refuses to
+              // submit. The × stays live in both states -- this chip is the
+              // thing that has to be removed to get moving again, so it would
+              // be a poor moment to take away the control that does it.
+              <span
+                key={f.email}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
+                  f.paused ? "bg-ink/5 text-ink/40" : "bg-teal/10 text-teal"
+                }`}
+              >
+                <span className={f.paused ? "opacity-50" : undefined}>
+                  <Avatar image={f.image} name={f.name} email={f.email} size={16} />
+                </span>
                 {f.name ?? f.email}
+                {f.paused && <span className="text-ink/30">· {PAUSED_TAG}</span>}
                 <button type="button" onClick={() => onChange(emails.filter((e) => e !== f.email))} aria-label={`Remove ${f.name ?? f.email}`}>
                   ×
                 </button>
@@ -86,16 +119,25 @@ export default function FriendPicker({
           <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-auto rounded-lg border border-line bg-white text-sm shadow-sm">
             {filtered.map((f) => (
               <li key={f.email}>
+                {/* Paused friends stay listed and go grey rather than
+                    disappearing. Dropping them from the list would read as
+                    "we've lost them" -- someone would search, find nothing,
+                    and go looking for a bug (or for the friend). Greyed and
+                    labelled answers the question on the spot. */}
                 <button
                   type="button"
+                  disabled={f.paused}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     addFriend(f.email!);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-ink/80 hover:bg-paper"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-ink/80 hover:bg-paper disabled:cursor-not-allowed disabled:text-ink/30 disabled:hover:bg-transparent"
                 >
-                  <Avatar image={f.image} name={f.name} email={f.email} size={20} />
+                  <span className={f.paused ? "opacity-40" : undefined}>
+                    <Avatar image={f.image} name={f.name} email={f.email} size={20} />
+                  </span>
                   <span>{f.name ?? f.email}</span>
+                  {f.paused && <span className="ml-auto text-xs text-ink/30">{PAUSED_TAG}</span>}
                 </button>
               </li>
             ))}
@@ -106,6 +148,16 @@ export default function FriendPicker({
       {query.trim().length > 0 && (
         <p className="mt-1.5 text-xs text-amber">
           Not added yet — pick a match from the list, or clear this text to continue.
+        </p>
+      )}
+
+      {/* Same amber as the warning above, since it's the same kind of thing:
+          a specific reason this form can't be submitted yet, with the fix
+          named in the sentence. */}
+      {pausedSelected.length > 0 && (
+        <p className="mt-1.5 text-xs text-amber">
+          {pausedInviteeMessage(pausedSelected.map((f) => f.name ?? f.email ?? "Someone"))} Remove{" "}
+          {pausedSelected.length === 1 ? "them" : "them all"} to continue.
         </p>
       )}
 

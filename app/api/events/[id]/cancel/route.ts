@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
-import { deleteGoogleEvent } from "../../../../../lib/calendar/google";
-import { deleteMicrosoftEvent } from "../../../../../lib/calendar/microsoft";
-import { deleteAppleEvent } from "../../../../../lib/calendar/apple";
+import { deleteUpstreamEvent } from "../../../../../lib/upstreamEvents";
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -23,35 +21,11 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   // If a real calendar event was created, actually delete it so every
   // attendee gets that provider's own cancellation email -- rather than
-  // leaving a stale event on everyone's calendar with no explanation.
-  // Uses the specific calendar it was written to at confirm time, not
-  // whatever's currently marked as the write target.
-  if (event.status === "CONFIRMED" && event.externalEventId && event.writeCalendarSourceId) {
-    const writeSource = await prisma.calendarSource.findUnique({
-      where: { id: event.writeCalendarSourceId },
-      include: { connectedCalendar: true },
-    });
-    try {
-      if (writeSource?.connectedCalendar.provider === "GOOGLE" && writeSource.connectedCalendar.nextAuthAccountId) {
-        await deleteGoogleEvent(writeSource.connectedCalendar.nextAuthAccountId, writeSource.externalId, event.externalEventId);
-      } else if (
-        writeSource?.connectedCalendar.provider === "MICROSOFT" &&
-        writeSource.connectedCalendar.nextAuthAccountId
-      ) {
-        await deleteMicrosoftEvent(writeSource.connectedCalendar.nextAuthAccountId, event.externalEventId);
-      } else if (writeSource?.connectedCalendar.provider === "APPLE_CALDAV" && event.externalEventHref) {
-        await deleteAppleEvent(writeSource.connectedCalendar.id, {
-          href: event.externalEventHref,
-          etag: event.externalEventEtag,
-        });
-      }
-    } catch (err) {
-      // If the calendar event was already deleted by hand (e.g. directly in
-      // Google Calendar), the API call will fail -- don't block cancelling
-      // in Venndra just because the upstream event is already gone.
-      console.error("Failed to delete upstream calendar event during cancel:", err);
-    }
-  }
+  // leaving a stale event on everyone's calendar with no explanation. Uses
+  // the specific calendar it was written to at confirm time, not whatever's
+  // currently marked as the write target, and never blocks the cancel over
+  // an upstream event that's already gone. See lib/upstreamEvents.
+  await deleteUpstreamEvent(event);
 
   const updated = await prisma.event.update({ where: { id: event.id }, data: { status: "CANCELLED" } });
   return NextResponse.json({ event: updated });

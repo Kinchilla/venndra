@@ -69,6 +69,18 @@ model User {
   // default (Mon-Fri 18:00-22:00) rather than to an empty object.
   defaultSearchFilters Json?
 
+  // Set while the user has paused their account from /settings: nobody else
+  // can add them to a NEW event (lib/pause.ts holds that rule and its copy).
+  // Deliberately narrow -- events they're already on are untouched, they
+  // stay visible everywhere they were visible before, and they keep every
+  // other ability they had, including organizing events of their own.
+  //
+  // A nullable timestamp rather than a boolean: "paused" and "paused since
+  // Tuesday" cost the same column, and the second one can answer questions
+  // the first can't. Null is the only value meaning "not paused" -- read it
+  // through the helpers in lib/pause.ts rather than comparing dates here.
+  pausedAt DateTime?
+
   accounts           Account[]
   sessions           Session[]
   connectedCalendars ConnectedCalendar[]

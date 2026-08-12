@@ -5,7 +5,7 @@ import { fromZonedTime } from "date-fns-tz";
 import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { recordKnownContacts } from "../../../lib/knownContacts";
-import { validateAllFriends } from "../../../lib/friends";
+import { validateAllFriends, validateNoPausedInvitees } from "../../../lib/friends";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -96,6 +96,16 @@ export async function POST(req: NextRequest) {
   // ("invite") and reads oddly when what's actually happening is an edit
   // to an event whose participants were already on it.
   if (friendError) return NextResponse.json({ error: friendError, code: "not-friends" }, { status: 400 });
+
+  // Same shape of check, one step further along: they're a friend, but
+  // they've paused their account, so they're not taking new events. The
+  // picker already greys these people out and refuses to submit, but this is
+  // the real enforcement point -- a stale tab, a saved group applied before
+  // they paused, or a raw API call all reach here otherwise. Its own `code`
+  // for the same reason as not-friends: callers shouldn't have to
+  // string-match to tell the two apart.
+  const pausedError = await validateNoPausedInvitees(creator.email, allEmails);
+  if (pausedError) return NextResponse.json({ error: pausedError, code: "paused" }, { status: 400 });
 
   const existingUsers = await prisma.user.findMany({
     where: { email: { in: allEmails } },

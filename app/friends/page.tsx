@@ -14,23 +14,34 @@ export default async function FriendsPage() {
   if (!session?.user) redirect("/login");
   const userId = (session.user as any).id;
 
+  const USER_SELECT = { id: true, name: true, email: true, image: true, pausedAt: true };
+
   const [sent, received] = await Promise.all([
     prisma.friendship.findMany({
       where: { requesterId: userId },
-      include: { addressee: { select: { id: true, name: true, email: true, image: true } } },
+      include: { addressee: { select: USER_SELECT } },
     }),
     prisma.friendship.findMany({
       where: { addresseeId: userId },
-      include: { requester: { select: { id: true, name: true, email: true, image: true } } },
+      include: { requester: { select: USER_SELECT } },
     }),
   ]);
 
+  // Same trade as the /api/friends route makes: the flag crosses to the
+  // chip, the timestamp behind it doesn't.
+  const toFriendUser = <T extends { pausedAt: Date | null }>({ pausedAt, ...user }: T) => ({
+    ...user,
+    paused: pausedAt !== null,
+  });
+
   const friends = [
-    ...sent.filter((f) => f.status === "ACCEPTED").map((f) => ({ id: f.id, user: f.addressee })),
-    ...received.filter((f) => f.status === "ACCEPTED").map((f) => ({ id: f.id, user: f.requester })),
+    ...sent.filter((f) => f.status === "ACCEPTED").map((f) => ({ id: f.id, user: toFriendUser(f.addressee) })),
+    ...received.filter((f) => f.status === "ACCEPTED").map((f) => ({ id: f.id, user: toFriendUser(f.requester) })),
   ];
-  const pendingSent = sent.filter((f) => f.status === "PENDING").map((f) => ({ id: f.id, user: f.addressee }));
-  const pendingReceived = received.filter((f) => f.status === "PENDING").map((f) => ({ id: f.id, user: f.requester }));
+  const pendingSent = sent.filter((f) => f.status === "PENDING").map((f) => ({ id: f.id, user: toFriendUser(f.addressee) }));
+  const pendingReceived = received
+    .filter((f) => f.status === "PENDING")
+    .map((f) => ({ id: f.id, user: toFriendUser(f.requester) }));
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
@@ -57,7 +68,10 @@ function FriendSection({
   kind,
 }: {
   title: string;
-  entries: { id: string; user: { id: string; name: string | null; email: string | null; image: string | null } }[];
+  entries: {
+    id: string;
+    user: { id: string; name: string | null; email: string | null; image: string | null; paused: boolean };
+  }[];
   kind: "friend" | "sent" | "received";
 }) {
   return (

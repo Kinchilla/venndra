@@ -146,6 +146,12 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
 
   const [submitting, setSubmitting] = useState(false);
   const [pickerHasPendingText, setPickerHasPendingText] = useState(false);
+  // Someone on the guest list has paused their account. Not something the
+  // picker can stop happening -- a saved group, a fromEvent prefill or a
+  // restored draft can all carry a person who paused in the meantime -- so
+  // the form holds submission back until they're taken out. The picker names
+  // who, directly under the list, so nothing extra needs saying here.
+  const [pickerHasPausedSelection, setPickerHasPausedSelection] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // CHANGED: new helper -- the single place that overwrites `filters` from
@@ -384,6 +390,10 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
       setError('Finish adding or clear the text in "People to include" before starting the search.');
       return;
     }
+    if (pickerHasPausedSelection) {
+      setError('Someone in "People to include" has paused their account — remove them to start the search.');
+      return;
+    }
     if (emails.length === 0) {
       setError("Add at least one friend's email.");
       return;
@@ -619,6 +629,7 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
             onChange={setEmails}
             currentUser={cachedCurrentUser}
             onPendingTextChange={setPickerHasPendingText}
+            onPausedSelectionChange={setPickerHasPausedSelection}
           />
           {showGroupTip && (
             <p className="mt-1.5 text-xs text-ink/50">
@@ -704,7 +715,11 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button type="submit" disabled={submitting || pickerHasPendingText} className={buttonClass({ variant: "primary", size: "lg", className: "w-fit" })}>
+        <button
+          type="submit"
+          disabled={submitting || pickerHasPendingText || pickerHasPausedSelection}
+          className={buttonClass({ variant: "primary", size: "lg", className: "w-fit" })}
+        >
           {submitting ? "Searching…" : "Start the search"}
         </button>
       </form>

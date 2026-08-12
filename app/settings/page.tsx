@@ -4,6 +4,7 @@ import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import { connectErrorMessage } from "../../lib/authErrors";
 import { hasUsableCalendar } from "../../lib/onboarding";
+import { upcomingConfirmedWhere } from "../../lib/eventLifecycle";
 import BackButton from "../../components/BackButton";
 import ProfileForm from "../../components/ProfileForm";
 import DefaultSearchTimesForm from "../../components/DefaultSearchTimesForm";
@@ -11,6 +12,7 @@ import { WeeklyHours } from "../../components/FiltersBuilder";
 import CalendarSourcesPanel from "../../components/CalendarSourcesPanel";
 import ConnectedAccountsSection from "../../components/ConnectedAccountsSection";
 import LogoutButton from "../../components/LogoutButton";
+import AccountManagement from "../../components/AccountManagement";
 
 export default async function SettingsPage({
   searchParams,
@@ -31,6 +33,16 @@ export default async function SettingsPage({
   // Without the second half, the banner outlived the problem it described and
   // told someone who had just connected iCloud that they still hadn't.
   const showNeedsCalendar = !!searchParams?.needsCalendar && !(await hasUsableCalendar(userId));
+
+  // Counted here rather than fetched by the section itself: it's one cheap
+  // query on a page that's already doing several, and it means the delete
+  // dialog can name a real number the instant it opens instead of opening
+  // with a gap in the sentence while a request is in flight. Matches what
+  // DELETE /api/me will actually cancel -- searches in progress plus
+  // confirmed events still to come, never anything already past.
+  const upcomingOrganizedCount = await prisma.event.count({
+    where: { creatorId: userId, OR: [{ status: "SEARCHING" }, upcomingConfirmedWhere()] },
+  });
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
@@ -111,6 +123,11 @@ export default async function SettingsPage({
         </p>
         <ConnectedAccountsSection />
       </section>
+
+      {/* Last on the page on purpose. Nothing here is part of ordinary
+          settings-tending, and both controls reach other people -- so they
+          sit past everything someone came to this page to actually do. */}
+      <AccountManagement initialPaused={user.pausedAt !== null} upcomingOrganizedCount={upcomingOrganizedCount} />
     </main>
   );
 }

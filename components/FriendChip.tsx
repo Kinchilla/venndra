@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { buttonClass } from "../lib/buttonStyles";
+import { PAUSED_TAG } from "../lib/pause";
 import Avatar from "./Avatar";
 
-type FriendUser = { id: string; name: string | null; email: string | null; image: string | null };
+type FriendUser = { id: string; name: string | null; email: string | null; image: string | null; paused: boolean };
 
 export default function FriendChip({
   friendshipId,
@@ -50,10 +51,18 @@ export default function FriendChip({
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white px-4 py-3">
-      <div className="flex items-center gap-2.5">
+      {/* Paused friends are dimmed, not removed: this is still a real
+          friendship, and the only thing that's changed is that new events
+          can't include them. Fading the identity while leaving the row's
+          own buttons at full strength says exactly that -- removing a friend
+          is unaffected by whether they've paused. */}
+      <div className={`flex items-center gap-2.5 ${user.paused ? "opacity-50" : ""}`}>
         <Avatar image={user.image} name={user.name} email={user.email} size={32} />
         <div>
-          <div className="text-sm font-medium">{displayName}</div>
+          <div className="text-sm font-medium">
+            {displayName}
+            {user.paused && <span className="ml-2 text-xs font-normal text-ink/40">· {PAUSED_TAG}</span>}
+          </div>
           {user.name && <div className="text-xs text-ink/40">{user.email}</div>}
         </div>
       </div>

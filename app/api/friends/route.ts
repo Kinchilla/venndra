@@ -4,7 +4,17 @@ import { z } from "zod";
 import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 
-const USER_SELECT = { id: true, name: true, email: true, image: true };
+const USER_SELECT = { id: true, name: true, email: true, image: true, pausedAt: true };
+
+/**
+ * Hands out whether someone is paused, never since when. Friends need the
+ * flag -- it's what greys them out in the picker -- but the timestamp is the
+ * paused person's own business, and there's nothing on this side of the app
+ * that could do anything useful with it.
+ */
+function toFriendUser<T extends { pausedAt: Date | null }>({ pausedAt, ...user }: T) {
+  return { ...user, paused: pausedAt !== null };
+}
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -17,13 +27,15 @@ export async function GET() {
   ]);
 
   const friends = [
-    ...sent.filter((f) => f.status === "ACCEPTED").map((f) => ({ friendshipId: f.id, user: f.addressee })),
-    ...received.filter((f) => f.status === "ACCEPTED").map((f) => ({ friendshipId: f.id, user: f.requester })),
+    ...sent.filter((f) => f.status === "ACCEPTED").map((f) => ({ friendshipId: f.id, user: toFriendUser(f.addressee) })),
+    ...received.filter((f) => f.status === "ACCEPTED").map((f) => ({ friendshipId: f.id, user: toFriendUser(f.requester) })),
   ];
-  const pendingSent = sent.filter((f) => f.status === "PENDING").map((f) => ({ friendshipId: f.id, user: f.addressee }));
+  const pendingSent = sent
+    .filter((f) => f.status === "PENDING")
+    .map((f) => ({ friendshipId: f.id, user: toFriendUser(f.addressee) }));
   const pendingReceived = received
     .filter((f) => f.status === "PENDING")
-    .map((f) => ({ friendshipId: f.id, user: f.requester }));
+    .map((f) => ({ friendshipId: f.id, user: toFriendUser(f.requester) }));
 
   return NextResponse.json({ friends, pendingSent, pendingReceived });
 }
