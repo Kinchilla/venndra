@@ -63,6 +63,28 @@ model User {
 
   timezone String @default("America/Denver")
 
+  // Phone number, for friend discovery (see issue #2). Stored in E.164
+  // ("+15551234567") -- digits and a leading plus, never the (555) 123-4567
+  // shape the field displays while you type. Display formatting is a property
+  // of a country and a viewer, not of the number, and a stored formatted
+  // string can't be compared against anything: contact matching works by
+  // equality on this column, so every row has to already agree on one spelling.
+  //
+  // phoneCountry is the ISO 3166-1 alpha-2 code the user picked in the
+  // dropdown, kept alongside because E.164 doesn't round-trip to it: +1 is the
+  // US, Canada, and most of the Caribbean, so without this the field would
+  // reopen showing the wrong flag for anyone who isn't American.
+  phone        String?
+  phoneCountry String?
+
+  // Null until the person proves they hold the number by opening the link
+  // texted to it. An unverified number is inert -- it does not participate in
+  // contact matching and nothing is ever sent to it -- because the entire
+  // premise of the field is "this is how friends find me," and a number
+  // anybody could type in would let anybody be found AS someone else.
+  // Changing the number clears this back to null (see lib/phoneVerification).
+  phoneVerifiedAt DateTime?
+
   // Personal default day/time windows for new event searches -- same shape
   // as Event.filters / SavedGroup.defaultFilters. Null means "no personal
   // default set," which falls back to FiltersBuilder's own hardcoded
@@ -88,12 +110,22 @@ model User {
   savedGroups        SavedGroup[]
   participations     EventParticipant[]
   knownContacts      KnownContact[]
+  phoneTokens        PhoneVerificationToken[]
   friendshipsSent     Friendship[] @relation("FriendshipRequester")
   friendshipsReceived Friendship[] @relation("FriendshipAddressee")
   dismissedSuggestionsMade     DismissedSuggestion[] @relation("DismissedSuggestionUser")
   dismissedSuggestionsReceived DismissedSuggestion[] @relation("DismissedSuggestionTarget")
 
   createdAt DateTime @default(now())
+
+  // Not @unique, on purpose. Two people CAN have the same number sitting in
+  // the field unverified -- one of them mistyped, or one is trying to claim
+  // the other's -- and a unique constraint would let whoever typed it first
+  // permanently lock the real owner out of ever adding their own number.
+  // "Only one VERIFIED holder" is the rule that actually matters, and it's
+  // enforced in lib/phoneVerification at redeem time, where the loser is the
+  // unproven claim rather than the earlier one.
+  @@index([phone])
 }
 
 model ConnectedCalendar {
@@ -353,6 +385,37 @@ model DismissedSuggestion {
   createdAt DateTime @default(now())
 
   @@unique([userId, dismissedUserId])
+}
+
+// A pending "prove you hold this number" link, one row per outstanding send.
+//
+// Deliberately NOT NextAuth's VerificationToken table, even though the flow is
+// shaped like a magic link. That table is keyed on `identifier` and is read by
+// the auth adapter as a means of SIGNING IN -- a row in it is a credential. A
+// phone token must never be able to authenticate anyone: the person clicking
+// it is already signed in, and all it may do is set a flag on a column. Kept
+// apart so a future change to either flow can't accidentally make one grant
+// the other's powers.
+//
+// Carries its own copy of `phone` rather than reading User.phone at redeem
+// time. The user can edit the field again while a text is still in flight, and
+// a token has to verify the number it was actually sent to -- otherwise
+// requesting a link for a number you hold, then editing the field to one you
+// don't, would verify the second one.
+model PhoneVerificationToken {
+  token String @id
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // E.164, matching User.phone.
+  phone String
+
+  expires   DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expires])
 }
 
 model RateLimitState {

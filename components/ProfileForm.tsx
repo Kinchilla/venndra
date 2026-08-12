@@ -5,17 +5,26 @@ import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
 import { buttonClass } from "../lib/buttonStyles";
 import Avatar from "./Avatar";
+import PhoneField from "./PhoneField";
 
 export default function ProfileForm({
   initialName,
   initialTimezone,
   image,
   email,
+  phone,
+  phoneCountry,
+  phoneVerified,
+  canSendSms,
 }: {
   initialName: string;
   initialTimezone: string;
   image: string | null;
   email: string | null;
+  phone: string | null;
+  phoneCountry: string | null;
+  phoneVerified: boolean;
+  canSendSms: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -105,6 +114,16 @@ export default function ProfileForm({
         </select>
         <span className="mt-1 block text-xs text-ink/40">Used as the default when you create a new search.</span>
       </label>
+
+      {/* Owns its own save, deliberately -- saving a number sends a text and
+          resets its verified state, which is not something the profile's Save
+          button should be able to do as a side effect of a timezone change. */}
+      <PhoneField
+        initialPhone={phone}
+        initialCountry={phoneCountry}
+        initialVerified={phoneVerified}
+        canSend={canSendSms}
+      />
 
       <div className="mt-5 flex items-center gap-3">
         <button

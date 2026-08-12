@@ -12,8 +12,42 @@
   --line: #e4ddd0;
 }
 
+/*
+ * Country flag glyphs, for the phone field's country dropdown.
+ *
+ * Windows ships no flag emoji at all -- Segoe UI Emoji has no glyphs for the
+ * regional indicator pairs a flag is written as -- so Chrome and Edge there
+ * fall back to drawing the two bare letters ("US", "GB"). macOS, iOS, Android
+ * and Firefox-on-Windows all render real flags without this file. It exists
+ * purely to close that one gap.
+ *
+ * Vendored from the `country-flag-emoji-polyfill` package (MIT), which repacks
+ * Twemoji's flags as a webfont. Only the .woff2 is used -- the package's own
+ * JS injects an @font-face pointing at a CDN, which would put a third-party
+ * request on every page load for something we can serve ourselves. Twemoji
+ * artwork is CC-BY 4.0, © Twitter, Inc and other contributors.
+ *
+ * The unicode-range is what makes this safe to put first in a font stack: the
+ * browser only consults this font for codepoints in the regional indicator
+ * block, so it can never affect ordinary text, and it isn't even downloaded on
+ * pages that render no flags.
+ */
+@font-face {
+  font-family: "Twemoji Country Flags";
+  src: url("/fonts/TwemojiCountryFlags.woff2") format("woff2");
+  unicode-range: U+1F1E6-1F1FF;
+  font-display: swap;
+}
+
 body {
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Opt-in for the few places that render a flag. Listed ahead of the body font
+   rather than replacing it -- the flag font has no Latin glyphs, so anything
+   using this still needs a real text font behind it. */
+.font-flags {
+  font-family: "Twemoji Country Flags", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 h1, h2, h3, .font-display {

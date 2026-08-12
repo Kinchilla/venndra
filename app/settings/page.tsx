@@ -5,6 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { connectErrorMessage } from "../../lib/authErrors";
 import { hasUsableCalendar } from "../../lib/onboarding";
 import { upcomingConfirmedWhere } from "../../lib/eventLifecycle";
+import { smsConfigured } from "../../lib/sms";
 import BackButton from "../../components/BackButton";
 import ProfileForm from "../../components/ProfileForm";
 import DefaultSearchTimesForm from "../../components/DefaultSearchTimesForm";
@@ -91,6 +92,12 @@ export default async function SettingsPage({
             initialTimezone={user.timezone}
             image={user.image}
             email={user.email}
+            phone={user.phone}
+            phoneCountry={user.phoneCountry}
+            phoneVerified={!!user.phoneVerifiedAt}
+            // Read on the server, since the Twilio credentials must never
+            // reach the client -- the field only needs the yes/no.
+            canSendSms={smsConfigured()}
           />
         </div>
       </section>
