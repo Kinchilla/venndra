@@ -10,18 +10,22 @@ import Button from "./Button";
  *
  * They're penned together because they're the only controls on the page whose
  * consequences reach other people -- but they are NOT the same weight, and
- * both the styling and the heading say so rather than leaving it to the copy.
- * Pausing wears the `edit` variant, the same teal outline as every other
- * reversible change on the site, because that's exactly what it is: one click
- * out, one click back. Only deleting gets `danger`, and only deleting asks
- * first.
+ * only ONE of them is allowed to say so.
  *
- * Called "Account management" and not "Danger zone" for the same reason.
- * Borrowing that phrase would have been the easy move -- it's what people
- * scan for -- but it labels pausing as dangerous, and pausing is a setting
- * you might reasonably switch on for a fortnight and off again. The section
- * carries the neutral name; the delete button carries the weight. See
- * lib/pause.ts for how little pausing actually changes.
+ * The section is neutral throughout: a plain white card with the site's
+ * ordinary border, an ink heading, and the same "Account management" name any
+ * settings page would use. It was briefly a red box under a "Danger zone"
+ * heading, and both were wrong for the same reason -- they painted pausing as
+ * dangerous, when it's a setting you might switch on for a fortnight and off
+ * again, no more alarming than a timezone. Colouring the whole container also
+ * spends the page's only red on the container rather than on the one control
+ * that has earned it.
+ *
+ * So the weight lives entirely in the buttons. Pausing wears the `edit`
+ * variant, the same teal outline as every other reversible change on the
+ * site, because that's exactly what it is: one click out, one click back.
+ * Only deleting gets `danger`, and only deleting asks first. See lib/pause.ts
+ * for how little pausing actually changes.
  */
 export default function AccountManagement({
   initialPaused,
@@ -103,15 +107,18 @@ export default function AccountManagement({
 
   return (
     <section className="mt-10">
-      {/* rounded-2xl rather than the rounded-xl used by the banners above:
-          this is a container holding several rows, not a single line of
-          text, and the softer corner keeps it reading as an area of the page
-          rather than an oversized alert. */}
-      <div className="rounded-2xl border border-red-200 bg-red-50/60 px-5 py-5">
-        <h2 className="font-display text-lg font-semibold text-red-700">Account management</h2>
+      {/* White on the page's paper background, so it still reads as its own
+          demarcated area without a colour that makes a claim. Same border and
+          fill as the friend/event chips elsewhere; rounded-2xl rather than
+          their rounded-xl because this holds several rows rather than one
+          line, and the softer corner suits an area over an item. */}
+      <div className="rounded-2xl border border-line bg-white px-5 py-5">
+        <h2 className="font-display text-lg font-semibold">Account management</h2>
 
+        {/* Keeps its red -- an error genuinely is one, and now that the card
+            around it is white this needs its own fill to separate from it. */}
         {error && (
-          <p className="mt-3 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-700">{error}</p>
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         )}
 
         <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
@@ -134,7 +141,7 @@ export default function AccountManagement({
           </Button>
         </div>
 
-        <div className="mt-5 border-t border-red-200 pt-5">
+        <div className="mt-5 border-t border-line pt-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 max-w-md">
               <div className="text-sm font-medium">Delete my account</div>
