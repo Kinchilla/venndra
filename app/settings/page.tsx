@@ -124,10 +124,19 @@ export default async function SettingsPage({
         <ConnectedAccountsSection />
       </section>
 
-      {/* Last on the page on purpose. Nothing here is part of ordinary
+      {/* Last on the page on purpose, but otherwise an ordinary section like
+          the four above it. Nothing here is part of routine
           settings-tending, and both controls reach other people -- so they
-          sit past everything someone came to this page to actually do. */}
-      <AccountManagement initialPaused={user.pausedAt !== null} upcomingOrganizedCount={upcomingOrganizedCount} />
+          sit past everything someone came to this page to actually do. That
+          ordering is the whole of the emphasis; it needs no box to say it
+          again. */}
+      <section className="mt-10">
+        <h2 className="font-display text-lg font-semibold">Account management</h2>
+        <p className="mt-1 text-sm text-ink/50">
+          Pause your account to stop being added to new events for a while, or delete it from Venndra entirely.
+        </p>
+        <AccountManagement initialPaused={user.pausedAt !== null} upcomingOrganizedCount={upcomingOrganizedCount} />
+      </section>
     </main>
   );
 }

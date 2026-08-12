@@ -6,26 +6,27 @@ import { signOut } from "next-auth/react";
 import Button from "./Button";
 
 /**
- * The two ways out, at the bottom of /settings.
+ * The two ways out, as the last section of /settings.
  *
- * They're penned together because they're the only controls on the page whose
- * consequences reach other people -- but they are NOT the same weight, and
- * only ONE of them is allowed to say so.
+ * Renders the rows only -- the <section>, heading and blurb live in
+ * app/settings/page.tsx alongside every other section's, which is what makes
+ * this one look like Connected accounts rather than like a special case.
  *
- * The section is neutral throughout: a plain white card with the site's
- * ordinary border, an ink heading, and the same "Account management" name any
- * settings page would use. It was briefly a red box under a "Danger zone"
- * heading, and both were wrong for the same reason -- they painted pausing as
- * dangerous, when it's a setting you might switch on for a fortnight and off
- * again, no more alarming than a timezone. Colouring the whole container also
- * spends the page's only red on the container rather than on the one control
- * that has earned it.
+ * Getting there took two passes worth recording, because both were the same
+ * mistake in different clothes. It began as a red box headed "Danger zone",
+ * then as a neutral white card still headed by its own <h2>. The colour was
+ * wrong because it painted pausing as dangerous, when pausing is a setting
+ * you might switch on for a fortnight and off again, no more alarming than a
+ * timezone -- and it spent the page's only red on a container rather than on
+ * the one control that had earned it. The card was wrong for a quieter
+ * reason: nothing else on /settings is boxed, so a box didn't read as
+ * "important", it read as "bolted on afterwards".
  *
- * So the weight lives entirely in the buttons. Pausing wears the `edit`
- * variant, the same teal outline as every other reversible change on the
- * site, because that's exactly what it is: one click out, one click back.
- * Only deleting gets `danger`, and only deleting asks first. See lib/pause.ts
- * for how little pausing actually changes.
+ * What's left carries the weight where it belongs, in the buttons. Pausing
+ * wears the `edit` variant, the same teal outline as every other reversible
+ * change on the site, because that's exactly what it is: one click out, one
+ * click back. Only deleting gets `danger`, and only deleting asks first. See
+ * lib/pause.ts for how little pausing actually changes.
  */
 export default function AccountManagement({
   initialPaused,
@@ -106,25 +107,27 @@ export default function AccountManagement({
   }
 
   return (
-    <section className="mt-10">
-      {/* White on the page's paper background, so it still reads as its own
-          demarcated area without a colour that makes a claim. Same border and
-          fill as the friend/event chips elsewhere; rounded-2xl rather than
-          their rounded-xl because this holds several rows rather than one
-          line, and the softer corner suits an area over an item. */}
-      <div className="rounded-2xl border border-line bg-white px-5 py-5">
-        <h2 className="font-display text-lg font-semibold">Account management</h2>
+    <div className="mt-3">
+      {error && (
+        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      )}
 
-        {/* Keeps its red -- an error genuinely is one, and now that the card
-            around it is white this needs its own fill to separate from it. */}
-        {error && (
-          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-        )}
-
-        <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+      {/* The same hairline-separated list Connected accounts above uses: two
+          rows, each a description on the left and its button on the right,
+          bounded top and bottom so the section has edges without needing a
+          box. items-center rather than items-start because the buttons should
+          line up with the row as a whole, not with the first line of a
+          description that may wrap to three. */}
+      <ul className="divide-y divide-line/60 border-y border-line/60">
+        <li className="flex flex-wrap items-center justify-between gap-4 py-3">
+          {/* States the account's condition rather than restating the button
+              beside it -- the left of these rows names the subject and the
+              right names the action, same as Connected accounts. It also
+              means the paused state is legible at a glance instead of having
+              to be inferred from which verb the button happens to show. */}
           <div className="min-w-0 max-w-md">
-            <div className="text-sm font-medium">{paused ? "Your account is paused" : "Pause my account"}</div>
-            <p className="mt-0.5 text-sm text-ink/60">
+            <div className="text-sm text-ink/80">{paused ? "Your account is paused" : "Your account is active"}</div>
+            <p className="mt-0.5 text-xs text-ink/40">
               {paused
                 ? "Nobody can add you to new events while you're paused. Unpause whenever you like — nothing else about your account has changed."
                 : "Nobody will be able to add you to new events. Events you're already on carry on as normal; if you want out of one of those, leave it yourself."}
@@ -139,29 +142,27 @@ export default function AccountManagement({
                 ? "Unpause my account"
                 : "Pause my account"}
           </Button>
-        </div>
+        </li>
 
-        <div className="mt-5 border-t border-line pt-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 max-w-md">
-              <div className="text-sm font-medium">Delete my account</div>
-              <p className="mt-0.5 text-sm text-ink/60">
-                Removes you from Venndra for good — every event, friends list and group you&apos;re part of, and any
-                connected calendar accounts. This can&apos;t be undone.
-              </p>
-            </div>
-            <Button
-              variant="danger"
-              confirm={deleteConfirmText}
-              onClick={handleDelete}
-              disabled={pending !== null}
-              className="shrink-0"
-            >
-              {pending === "delete" ? "Deleting…" : "Delete my account"}
-            </Button>
+        <li className="flex flex-wrap items-center justify-between gap-4 py-3">
+          <div className="min-w-0 max-w-md">
+            <div className="text-sm text-ink/80">Deleting can&apos;t be undone</div>
+            <p className="mt-0.5 text-xs text-ink/40">
+              Removes you from Venndra for good — every event, friends list and group you&apos;re part of, and any
+              connected calendar accounts.
+            </p>
           </div>
-        </div>
-      </div>
-    </section>
+          <Button
+            variant="danger"
+            confirm={deleteConfirmText}
+            onClick={handleDelete}
+            disabled={pending !== null}
+            className="shrink-0"
+          >
+            {pending === "delete" ? "Deleting…" : "Delete my account"}
+          </Button>
+        </li>
+      </ul>
+    </div>
   );
 }
