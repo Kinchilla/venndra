@@ -112,21 +112,34 @@ export default function AccountManagement({
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
 
-      {/* The same hairline-separated list Connected accounts above uses: two
-          rows, each a description on the left and its button on the right,
-          bounded top and bottom so the section has edges without needing a
-          box. items-center rather than items-start because the buttons should
-          line up with the row as a whole, not with the first line of a
-          description that may wrap to three. */}
+      {/*
+        The same hairline-separated list Connected accounts above uses: two
+        rows, each a description on the left and its button on the right,
+        bounded top and bottom so the section has edges without needing a box.
+        items-center rather than items-start because the buttons should line up
+        with the row as a whole, not with the first line of a description that
+        may wrap to three.
+
+        The text column FLEXES rather than carrying a max width, and that's
+        load-bearing. It was `max-w-md`, which pinned it at 448px of a 624px
+        row and left the button whatever remained -- 160px. "Pause my account"
+        fits that; "Unpause my account" is 176px, so merely pausing pushed the
+        button onto its own line, left-aligned, every time. Giving the text
+        `flex-1` inverts the priority: the button takes the width it needs and
+        the description gets the rest, so no label can ever break the row.
+
+        Stacked below `sm` because at phone widths a row would squeeze the
+        description into a column barely wider than the button beside it.
+      */}
       <ul className="divide-y divide-line/60 border-y border-line/60">
-        <li className="flex flex-wrap items-center justify-between gap-4 py-3">
+        <li className="flex flex-col items-start gap-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           {/* Deliberately echoes the button beside it. Connected accounts
               names a subject on the left and an action on the right, and
               this row briefly did the same ("Your account is active") -- but
               that made the reader work out which sentence the button
               belonged to, where naming the action twice is instantly clear
               about what is on offer. Redundancy is the cheaper cost. */}
-          <div className="min-w-0 max-w-md">
+          <div className="min-w-0 sm:flex-1">
             <div className="text-sm text-ink/80">{paused ? "Your account is paused" : "Pause my account"}</div>
             <p className="mt-0.5 text-xs text-ink/40">
               {paused
@@ -145,8 +158,8 @@ export default function AccountManagement({
           </Button>
         </li>
 
-        <li className="flex flex-wrap items-center justify-between gap-4 py-3">
-          <div className="min-w-0 max-w-md">
+        <li className="flex flex-col items-start gap-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="min-w-0 sm:flex-1">
             <div className="text-sm text-ink/80">Delete my account</div>
             <p className="mt-0.5 text-xs text-ink/40">
               Removes you from Venndra for good — every event, friends list and group you&apos;re part of, and any
