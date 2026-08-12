@@ -55,12 +55,19 @@ export function signInErrorMessage(code: string): string {
     case "OAuthAccountNotLinked":
       // Thrown by callback-handler when an account already exists under this
       // provider's email address and the provider isn't set to auto-link.
+      // On this signed-out path that now means MICROSOFT and only Microsoft:
+      // Google sets allowDangerousEmailAccountLinking (see lib/auth.ts) and
+      // links to the existing user instead of throwing, so it never gets
+      // here. Named rather than hedged, because "your Google or Microsoft
+      // account" would send half its readers looking for a Google problem
+      // that can no longer happen.
+      //
       // The email route out is offered first because it always works and
       // needs nothing set up: a magic link to that same address reaches the
       // existing account directly (NextAuth's email branch matches on email
       // regardless of how the account was created), and this provider can
       // then be attached for good from Settings.
-      return "An account already exists for that email address. Sign in with the email link below and you'll land in it — you can then connect this Google or Microsoft account from Settings, and sign in with it directly from then on.";
+      return "An account already exists for that email address. Sign in with the email link below and you'll land in it — you can then connect this Microsoft account from Settings, and sign in with it directly from then on.";
     case "AccessDenied":
       return "You didn't grant Venndra the access it needs to sign you in. If this is a work or school account, an administrator may have to approve Venndra first.";
     // The email provider's send step failed. Covers a genuinely broken send

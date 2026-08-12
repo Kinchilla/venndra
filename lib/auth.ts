@@ -5,7 +5,7 @@ import { prisma } from "./prisma";
 import { syncParticipantStatusForUser } from "./participants";
 import { populateCalendarSources } from "./calendarSources";
 import { magicLinkProvider } from "./magicLink";
-import { prismaAdapterTolerantOfMissingSessions } from "./authAdapter";
+import { prismaAdapterWithMagicLinkFixes } from "./authAdapter";
 
 // Scopes we need in addition to basic sign-in:
 // - Google: read calendar free/busy + create events on the primary calendar
@@ -55,27 +55,42 @@ const MS_SCOPES = [
  *   blunt -- it inspects neither side's emailVerified -- so turning it on
  *   means trusting that provider's email claim outright.
  *
- *   DELIBERATELY LEFT OFF, on both providers. Not an oversight and not a
- *   to-do -- don't switch it on to "fix" an OAuthAccountNotLinked report
- *   without re-reading this.
+ *   ON for Google. OFF for Microsoft. The asymmetry is the point, and it is
+ *   about how much each provider's email claim is worth, not about how much
+ *   we like each provider.
  *
- *   Off costs almost nothing, because this direction is still reachable
- *   without it: sign in by magic link, then use Connect another account in
- *   Settings. That path goes through the `if (user)` branch, which links to
- *   the signed-in user directly -- and after that one-time link, signing in
- *   with the provider works forever, because getUserByAccount now finds it.
- *   The flag would save one click, once, for one kind of user.
+ *   Google is on because asserting an address there means controlling it.
+ *   gmail.com is Google's own namespace; a Workspace domain has to pass DNS
+ *   verification before its admin can mint anything in it, and even then only
+ *   within that domain; a Google Account on an outside address is
+ *   email-verified at creation. So the claim is worth about what receiving
+ *   mail at the address is worth -- which is exactly the trust magic-link
+ *   sign-in already extends, one section up. Turning it on adds no new class
+ *   of access.
  *
- *   On would cost something real, and the risk is NOT the same as the risk
- *   magic link already carries. A magic link requires actually receiving mail
- *   at the address. This flag doesn't: it accepts whatever email a provider
- *   asserts. Microsoft documents Entra's `email` claim as unverified and
- *   admin-settable, and MICROSOFT_TENANT_ID defaults to "common" (any tenant),
- *   so with the flag on, someone who stood up their own tenant and set a
- *   user's mail attribute to a Venndra member's address would be handed that
- *   account -- connected calendars included -- having never had access to the
- *   mailbox. Google's claim is trustworthy, but the two are kept symmetric so
- *   there's one rule here instead of a per-provider exception to remember.
+ *   Microsoft is off because its claim is worth much less. Entra's `email` is
+ *   documented as unverified and admin-settable, and MICROSOFT_TENANT_ID
+ *   defaults to "common" (any tenant), so with the flag on, someone who stood
+ *   up their own tenant and set a user's mail attribute to a Venndra member's
+ *   address would be handed that account -- connected calendars included --
+ *   having never had access to the mailbox. That is a real takeover path and
+ *   it stays shut.
+ *
+ *   These two were once kept symmetric on the theory that one rule is easier
+ *   to remember than a per-provider exception. That symmetry was arbitrary --
+ *   it took the weaker provider's risk and charged it to the safer one -- and
+ *   it had a running cost, paid by users rather than by whoever reads this
+ *   file. Off, a Google user whose account was created some other way hits
+ *   "an account already exists for that email address" and has exactly one way
+ *   out: sign in by magic link, then Connect another account in Settings. That
+ *   works right up until the magic link is the thing that's failing, and then
+ *   the two sign-in methods deadlock and the person is simply locked out.
+ *   Being able to fall back on either method when the other misbehaves is
+ *   worth more than the tidiness of one rule.
+ *
+ *   What this does NOT do is make a second account under the same address. It
+ *   links the Google account to the existing user, which is the same end state
+ *   as Connect another account in Settings, reached without the round trip.
  *
  * The next thought after reading the above -- "fine, then let the provider
  * make a SECOND account instead of erroring" -- is also deliberately not
@@ -107,17 +122,22 @@ const MS_SCOPES = [
  * Venndra user's mailbox can get into that Venndra account. Before this,
  * doing so meant getting through Google or Microsoft's login. This is
  * inherent to emailing people a credential, and the mitigations are in
- * lib/magicLink.ts -- 15-minute single-use links, and a send rate limit.
+ * lib/magicLink.ts -- a 15-minute expiry, and a send rate limit. Not
+ * single use: a link works for its whole window, for the reasons set out at
+ * useVerificationToken in authAdapter.ts.
  */
 export const authOptions: NextAuthOptions = {
-  // Not PrismaAdapter(prisma) directly -- see authAdapter.ts for the one
-  // behaviour that's overridden and why magic-link sign-in needs it.
-  adapter: prismaAdapterTolerantOfMissingSessions(),
+  // Not PrismaAdapter(prisma) directly -- see authAdapter.ts for the two
+  // behaviours that are overridden and why magic-link sign-in needs them.
+  adapter: prismaAdapterWithMagicLinkFixes(),
   session: { strategy: "database" },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      // Google only, and not Microsoft -- the long comment above is the whole
+      // argument for why the two differ. Read it before changing either.
+      allowDangerousEmailAccountLinking: true,
       authorization: {
         params: {
           scope: GOOGLE_SCOPES,
