@@ -78,7 +78,7 @@ export function signInErrorMessage(code: string): string {
     case "EmailSignin":
       return "Couldn't send that sign-in link just now. If you've asked for a few in a row, wait a minute and try again.";
     // The token in a clicked link was missing, already used, or past its
-    // 15-minute expiry.
+    // 10-minute expiry.
     case "Verification":
       return "That sign-in link has expired or was already used. Request a fresh one below.";
     default:

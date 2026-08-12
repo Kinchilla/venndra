@@ -33,7 +33,14 @@ import { checkRateLimit } from "./rateLimit";
 const SEND_LIMIT_PER_MINUTE = 3;
 
 /** How long a link stays usable. */
-const LINK_MAX_AGE_SECONDS = 15 * 60;
+const LINK_MAX_AGE_SECONDS = 10 * 60;
+
+/**
+ * The same window in whole minutes, exported so anything that TELLS a user how
+ * long they have reads it from here rather than restating it. Both the emails
+ * below and app/login/check-email have drifted from the real number before.
+ */
+export const LINK_MAX_AGE_MINUTES = Math.round(LINK_MAX_AGE_SECONDS / 60);
 
 export function magicLinkProvider(): EmailConfig {
   return {
@@ -46,12 +53,12 @@ export function magicLinkProvider(): EmailConfig {
     // rather than stubbed so it can't contradict what actually goes out.
     from: fromAddress(),
 
-    // 15 minutes, against NextAuth's 24-hour default. A magic link is a
+    // 10 minutes, against NextAuth's 24-hour default. A magic link is a
     // bearer credential sitting in an inbox, and a full day is a long time
     // for one to stay live -- long enough to matter if the mailbox is on a
     // shared or already-compromised device. Short enough to be annoying only
-    // if someone leaves the tab for a quarter of an hour, and requesting
-    // another is one click.
+    // if someone leaves the tab for ten minutes, and requesting another is
+    // one click.
     //
     // This number carries more weight than it used to. Links are no longer
     // single use -- authAdapter.ts stopped consuming them, because the one use
@@ -95,13 +102,11 @@ async function sendVerificationRequest({ identifier, url }: SendVerificationRequ
   });
 }
 
-const MINUTES = Math.round(LINK_MAX_AGE_SECONDS / 60);
-
 function text(url: string): string {
   return [
     "Sign in to Venndra",
     "",
-    `Open this link to sign in. It expires in ${MINUTES} minutes:`,
+    `Open this link to sign in. It expires in ${LINK_MAX_AGE_MINUTES} minutes:`,
     url,
     "",
     "If you didn't ask to sign in, you can ignore this email — nobody can get into your account without this link.",
@@ -125,7 +130,7 @@ function html(url: string): string {
           </tr>
           <tr>
             <td style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:22px;color:#231F20;opacity:0.7;padding-bottom:24px;">
-              Click the button below to sign in. This link expires in ${MINUTES} minutes.
+              Click the button below to sign in. This link expires in ${LINK_MAX_AGE_MINUTES} minutes.
             </td>
           </tr>
           <tr>

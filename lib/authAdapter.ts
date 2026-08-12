@@ -7,7 +7,7 @@ import { prisma } from "./prisma";
  *
  *   deleteSession         -- swallows "no such row" instead of throwing.
  *   useVerificationToken  -- reads a magic-link token without consuming it, so
- *                            a link works for its whole 15-minute window
+ *                            a link works for its whole 10-minute window
  *                            rather than exactly once.
  *
  * Both exist because of magic-link sign-in, and both are explained in full at
@@ -89,7 +89,7 @@ export function prismaAdapterWithMagicLinkFixes(): Adapter {
      *
      * Expiry is untouched and still enforced -- just not here. NextAuth's
      * callback route rejects `invite.expires.valueOf() < Date.now()` on the row
-     * this returns, so the 15 minutes set in lib/magicLink.ts remains the real
+     * this returns, so the 10 minutes set in lib/magicLink.ts remains the real
      * limit, and an expired row is as dead as a missing one.
      *
      * What's given up: inside that window a link is a bearer credential usable

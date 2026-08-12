@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { buttonClass } from "../../../lib/buttonStyles";
+import { LINK_MAX_AGE_MINUTES } from "../../../lib/magicLink";
 
 /**
  * Where NextAuth parks the browser once a magic link has been sent
@@ -21,8 +22,8 @@ export default function CheckEmailPage() {
         signed straight in.
       </p>
       <p className="mt-4 text-sm text-ink/50">
-        The link works once and expires in 15 minutes. If it doesn&apos;t arrive within a minute or two, check your spam
-        folder before requesting another.
+        The link expires in {LINK_MAX_AGE_MINUTES} minutes. If it doesn&apos;t arrive within a minute or two, check your
+        spam folder before requesting another.
       </p>
       <Link href="/login" className={buttonClass({ variant: "neutral", size: "xl", className: "mt-8 text-center" })}>
         Back to sign in

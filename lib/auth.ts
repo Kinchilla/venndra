@@ -122,7 +122,7 @@ const MS_SCOPES = [
  * Venndra user's mailbox can get into that Venndra account. Before this,
  * doing so meant getting through Google or Microsoft's login. This is
  * inherent to emailing people a credential, and the mitigations are in
- * lib/magicLink.ts -- a 15-minute expiry, and a send rate limit. Not
+ * lib/magicLink.ts -- a 10-minute expiry, and a send rate limit. Not
  * single use: a link works for its whole window, for the reasons set out at
  * useVerificationToken in authAdapter.ts.
  */
