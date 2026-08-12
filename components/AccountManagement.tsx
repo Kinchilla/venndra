@@ -120,13 +120,14 @@ export default function AccountManagement({
           description that may wrap to three. */}
       <ul className="divide-y divide-line/60 border-y border-line/60">
         <li className="flex flex-wrap items-center justify-between gap-4 py-3">
-          {/* States the account's condition rather than restating the button
-              beside it -- the left of these rows names the subject and the
-              right names the action, same as Connected accounts. It also
-              means the paused state is legible at a glance instead of having
-              to be inferred from which verb the button happens to show. */}
+          {/* Deliberately echoes the button beside it. Connected accounts
+              names a subject on the left and an action on the right, and
+              this row briefly did the same ("Your account is active") -- but
+              that made the reader work out which sentence the button
+              belonged to, where naming the action twice is instantly clear
+              about what is on offer. Redundancy is the cheaper cost. */}
           <div className="min-w-0 max-w-md">
-            <div className="text-sm text-ink/80">{paused ? "Your account is paused" : "Your account is active"}</div>
+            <div className="text-sm text-ink/80">{paused ? "Your account is paused" : "Pause my account"}</div>
             <p className="mt-0.5 text-xs text-ink/40">
               {paused
                 ? "Nobody can add you to new events while you're paused. Unpause whenever you like — nothing else about your account has changed."
@@ -146,10 +147,10 @@ export default function AccountManagement({
 
         <li className="flex flex-wrap items-center justify-between gap-4 py-3">
           <div className="min-w-0 max-w-md">
-            <div className="text-sm text-ink/80">Deleting can&apos;t be undone</div>
+            <div className="text-sm text-ink/80">Delete my account</div>
             <p className="mt-0.5 text-xs text-ink/40">
               Removes you from Venndra for good — every event, friends list and group you&apos;re part of, and any
-              connected calendar accounts.
+              connected calendar accounts. This can&apos;t be undone.
             </p>
           </div>
           <Button
