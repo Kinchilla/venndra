@@ -4,8 +4,8 @@ import Providers from "../components/Providers";
 import SiteHeader from "../components/SiteHeader";
 
 export const metadata: Metadata = {
-  title: "Venndra — find a time that works for everyone",
-  description: "Calendly, but for hanging out.",
+  title: "Venndra | Find a time that works for everyone",
+  description: "Automated scheduling for friend groups.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
