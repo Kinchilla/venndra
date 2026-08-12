@@ -35,3 +35,11 @@ tsconfig.tsbuildinfo
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# Internal docs -- kept local. The repo is public, and these map the whole
+# backend (route by route, plus rate-limit thresholds); no reason to publish
+# that. Same treatment as the rest of the docs in ../docs/.
+#
+# README.md is deliberately NOT here: it's the short public-facing one.
+/INTERNALS.md
+/EDITING_GUIDE.md
