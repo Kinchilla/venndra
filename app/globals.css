@@ -83,3 +83,73 @@ h1, h2, h3, .font-display {
   overflow: hidden;
 }
 
+/* Suggested-friend chips leave in two stages: the chip fades, and only once it
+   is fully transparent does its row collapse, so the chips below rise into the
+   space rather than jumping while it is still visible. The collapse is the same
+   grid-template-rows trick as .accordion above -- the delay on that half of the
+   transition is what sequences the two stages.
+
+   The spacing between chips lives on the inner element rather than as a grid
+   `gap`, because a gap does not collapse along with its row: with `gap-2` on
+   the container, a fully-collapsed row still leaves a ghost of the chip that
+   just left. */
+/* Holds a fixed pixel height while a chip is being swapped out, so the page
+   does not lose and regain that height and jolt the scroll position.
+   `align-content: start` is load-bearing: a grid given an explicit height
+   stretches its auto-sized rows to fill it, which would puff the chips up
+   whenever the pinned height ran ahead of the content. */
+.suggestion-list {
+  display: grid;
+  align-content: start;
+  transition: height 240ms ease;
+}
+
+.suggestion-row {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.suggestion-row-inner {
+  overflow: hidden;
+}
+/* The spacing sits on a child of the clipped element rather than on the
+   clipped element itself. A 0fr track zeroes an item's content box but not its
+   padding, so padding here would survive the collapse and leave an 8px sliver
+   where the chip used to be -- which then disappears in a snap on unmount,
+   the exact jump the animation exists to avoid. One level further in, it gets
+   clipped along with everything else and the row really does reach zero. */
+.suggestion-row-pad {
+  padding-bottom: 0.5rem;
+}
+.suggestion-row:last-child .suggestion-row-pad {
+  padding-bottom: 0;
+}
+.suggestion-row[data-leaving="true"] {
+  opacity: 0;
+  grid-template-rows: 0fr;
+  pointer-events: none;
+  transition: opacity 300ms ease, grid-template-rows 240ms ease 300ms;
+}
+
+/* The mirror image of leaving: a new chip grows its row from zero as it fades
+   in, rather than the row snapping to full height while only the opacity
+   animates -- which reads as the list jerking downwards underneath the chip.
+   Animating grid-template-rows from a keyframe avoids having to mount the row
+   collapsed and flip it open on a later frame. */
+.suggestion-row[data-entering="true"] {
+  animation: suggestion-enter 320ms ease both;
+}
+@keyframes suggestion-enter {
+  from {
+    opacity: 0;
+    grid-template-rows: 0fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The global rule above collapses the durations but not the delay, which
+     would otherwise leave a 150ms pause before the row closes. */
+  .suggestion-row[data-leaving="true"] {
+    transition-delay: 0ms;
+  }
+}
+

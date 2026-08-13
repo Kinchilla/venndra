@@ -45,7 +45,12 @@ export async function GET() {
 
   const ranked = [...sharedCount.entries()]
     .filter(([id]) => !excluded.has(id))
-    .sort((a, b) => b[1] - a[1] || Math.random() - 0.5) // ties broken randomly
+    // Ties break on id: arbitrary, but *stable*. The list is refetched every
+    // time a chip is dismissed or requested, to backfill the freed slot, and a
+    // random tiebreak would let equally-ranked people come back in a different
+    // order on each of those calls -- reshuffling the chips still on screen,
+    // and making "the next suggestion" a coin flip rather than a position.
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, 5)
     .map(([id]) => id);
 
