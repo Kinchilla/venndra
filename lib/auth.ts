@@ -8,13 +8,31 @@ import { magicLinkProvider } from "./magicLink";
 import { prismaAdapterWithMagicLinkFixes } from "./authAdapter";
 
 // Scopes we need in addition to basic sign-in:
-// - Google: read calendar free/busy + create events on the primary calendar
+// - Google: enumerate the account's calendars + read and write events
 // - Microsoft: read calendars + create events, via Graph
+//
+// Only TWO Google calendar scopes, and deliberately not a third for reading
+// events. calendar.events is not read-only -- it is "View and edit events on
+// all your calendars" -- so it already covers every read this app does
+// (events.list in getGoogleBusyIntervals, events.get in removeGoogleAttendee)
+// as well as the writes. Verified against the live API across owner-role,
+// reader-role and imported calendars, so adding calendar.events.readonly
+// alongside it would be dead weight.
+//
+// calendar.calendarlist.readonly exists solely because calendarList.list
+// (listGoogleCalendars) is the one call calendar.events does NOT cover -- it
+// 403s "insufficient authentication scopes" without a calendarlist scope.
+//
+// This replaced the broader calendar.readonly, which additionally granted
+// read access to calendar settings and calendar metadata that Venndra never
+// touches. It did NOT grant ACL access -- that needs calendar.acls, which
+// this app has never requested. See issue #20 for the full scope audit and
+// why narrowing further would each cost a shipped feature.
 const GOOGLE_SCOPES = [
   "openid",
   "email",
   "profile",
-  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
   "https://www.googleapis.com/auth/calendar.events",
 ].join(" ");
 
