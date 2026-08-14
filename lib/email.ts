@@ -35,11 +35,33 @@ export function fromAddress(): string {
   return process.env.EMAIL_FROM ?? "Venndra <onboarding@resend.dev>";
 }
 
+/**
+ * One file attached to an outgoing message.
+ *
+ * `content` is the raw bytes. Resend base64-encodes them onto the wire itself,
+ * which inflates by about a third -- worth knowing before attaching anything
+ * large, since the limit applies to the encoded size, not the Buffer's.
+ */
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+};
+
 export type SendEmailParams = {
   to: string;
   subject: string;
   html: string;
   text: string;
+  /**
+   * Optional files to attach.
+   *
+   * Added for the feedback form's opt-in screenshot, which is the only thing
+   * attaching anything so far. It lives here rather than in a second sender
+   * because of the choke-point rule at the top of this file: an outbound path
+   * that bypassed send() to attach a file would be exactly the kind of thing
+   * "what does Venndra email people about" could no longer answer.
+   */
+  attachments?: EmailAttachment[];
 };
 
 /**
@@ -59,15 +81,22 @@ export type SendEmailParams = {
  *     is the kind of failure that looks fine in every dashboard while nobody
  *     can get in, so it fails loudly instead.
  */
-export async function sendEmail({ to, subject, html, text }: SendEmailParams): Promise<void> {
+export async function sendEmail({ to, subject, html, text, attachments }: SendEmailParams): Promise<void> {
   const resend = getClient();
 
   if (!resend) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("RESEND_API_KEY is not set, so no email could be sent.");
     }
+    // Attachments are named and sized rather than dumped -- the point of the
+    // dev log is that the message is readable in a terminal, and a screenshot's
+    // worth of bytes scrolled across it would defeat that. Naming them is still
+    // enough to tell whether the attaching worked.
+    const files = attachments?.length
+      ? `\nAttachments: ${attachments.map((a) => `${a.filename} (${a.content.length} bytes)`).join(", ")}`
+      : "";
     // eslint-disable-next-line no-console
-    console.log(`\n--- email (dev, not actually sent) ---\nTo: ${to}\nSubject: ${subject}\n\n${text}\n---\n`);
+    console.log(`\n--- email (dev, not actually sent) ---\nTo: ${to}\nSubject: ${subject}${files}\n\n${text}\n---\n`);
     return;
   }
 
@@ -75,7 +104,16 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams): P
   // a bad key or an unverified From: domain comes back as { error }, not as a
   // thrown exception. Without this check a rejected send would look exactly
   // like a successful one.
-  const { error } = await resend.emails.send({ from: fromAddress(), to, subject, html, text });
+  const { error } = await resend.emails.send({
+    from: fromAddress(),
+    to,
+    subject,
+    html,
+    text,
+    // Omitted entirely rather than passed as [] when there's nothing to
+    // attach, so the common case sends the same payload it always did.
+    ...(attachments?.length ? { attachments } : {}),
+  });
   if (error) {
     throw new Error(`Resend refused the message: ${error.message ?? JSON.stringify(error)}`);
   }
