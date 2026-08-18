@@ -1,5 +1,6 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { prisma } from "../prisma";
+import { markAccountAuthFailed } from "./authHealth";
 import type { BusyInterval, CalendarListing } from "./google";
 
 async function getValidAccessToken(accountId: string): Promise<string> {
@@ -23,7 +24,14 @@ async function getValidAccessToken(accountId: string): Promise<string> {
   });
 
   const tokens = await resp.json();
-  if (!resp.ok) throw new Error(`Microsoft token refresh failed: ${JSON.stringify(tokens)}`);
+  if (!resp.ok) {
+    // Same OAuth2 error name as Google's, but reached without gaxios, so it
+    // is classified here rather than through isDeadGrantError's response
+    // shape. Everything else from this endpoint is transient and stays
+    // unflagged.
+    if (tokens?.error === "invalid_grant") await markAccountAuthFailed(accountId);
+    throw new Error(`Microsoft token refresh failed: ${JSON.stringify(tokens)}`);
+  }
 
   await prisma.account.update({
     where: { id: accountId },

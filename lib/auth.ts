@@ -6,6 +6,7 @@ import { syncParticipantStatusForUser } from "./participants";
 import { populateCalendarSources } from "./calendarSources";
 import { magicLinkProvider } from "./magicLink";
 import { prismaAdapterWithMagicLinkFixes } from "./authAdapter";
+import { clearAccountAuthFailed } from "./calendar/authHealth";
 
 // Scopes we need in addition to basic sign-in:
 // - Google: enumerate the account's calendars + read and write events
@@ -252,7 +253,7 @@ export const authOptions: NextAuthOptions = {
     // cookie was already set.
     async signIn({ account }) {
       if (account?.type !== "oauth") return;
-      await prisma.account.update({
+      const refreshed = await prisma.account.update({
         where: {
           provider_providerAccountId: { provider: account.provider, providerAccountId: account.providerAccountId },
         },
@@ -270,6 +271,12 @@ export const authOptions: NextAuthOptions = {
           token_type: account.token_type ?? undefined,
         },
       });
+
+      // Tokens just came back good, so whatever dead grant was recorded
+      // against this account is now stale. This is the only place that can
+      // clear it: a new refresh_token comes solely from an
+      // authorization-code exchange, which is exactly what just happened.
+      await clearAccountAuthFailed(refreshed.id);
     },
   },
   pages: {

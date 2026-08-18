@@ -158,6 +158,27 @@ model ConnectedCalendar {
   label     String // e.g. "Google (dan@gmail.com)", "iCloud"
   isEnabled Boolean @default(true)
 
+  // Set the first time a token refresh for this calendar comes back with a
+  // dead grant (`invalid_grant` from either provider), and cleared whenever
+  // the account is re-authorized -- see events.signIn in lib/auth.ts. Null
+  // means healthy.
+  //
+  // Deliberately NOT surfaced to end users yet. While the Google app sits in
+  // "Testing" status its refresh tokens expire after ~7 days for EVERY
+  // connected user, so a reconnect banner driven off this column would fire
+  // weekly for the whole user base and teach people to ignore it -- and the
+  // reconnect it asks for only buys another 7 days. This column exists so
+  // that "who is broken right now?" is one query instead of a hunt through
+  // Vercel logs, which retain an hour. Turn the user-facing prompt on once
+  // the app is verified and published, at which point a dead grant means a
+  // real revocation and is rare enough to be worth interrupting someone for.
+  //
+  // Records the FIRST failure, not the most recent: the setter only writes
+  // where this is already null, so it reads as "broken since", and an
+  // account that is down costs one write per breakage rather than one per
+  // request (a broken account fails on every availability check).
+  authFailedAt DateTime?
+
   sources CalendarSource[]
 
   createdAt DateTime @default(now())
