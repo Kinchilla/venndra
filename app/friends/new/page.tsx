@@ -1,98 +1,18 @@
-"use client";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "../../../lib/auth";
+import NewFriendForm from "../../../components/NewFriendForm";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import BackButton from "../../../components/BackButton";
-import SuggestedFriendsSection from "../../../components/SuggestedFriendsSection";
-import { buttonClass } from "../../../lib/buttonStyles";
+export default async function NewFriendPage() {
+  const session = await getServerSession(authOptions);
+  // The form itself is a client component (components/NewFriendForm), which is
+  // why this page exists as a shell -- the guard has to run on the server, and
+  // signed out there is nothing here that works. Every route the form touches
+  // 401s, and it renders those failures badly: /api/friends/check comes back
+  // without an `exists`, so the falsy branch wins and the form tells you no
+  // Venndra profile exists for whatever address you typed, which is a
+  // confident lie rather than an error.
+  if (!session?.user) redirect("/login?callbackUrl=/friends/new");
 
-export default function NewFriendPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [checkResult, setCheckResult] = useState<{ exists: boolean; name: string | null } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  useEffect(() => {
-    if (!email.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setCheckResult(null);
-      return;
-    }
-    setChecking(true);
-    const timeout = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/friends/check?email=${encodeURIComponent(email.trim())}`);
-        setCheckResult(await res.json());
-      } finally {
-        setChecking(false);
-      }
-    }, 400);
-    return () => clearTimeout(timeout);
-  }, [email]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    const res = await fetch("/api/friends", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim() }),
-    });
-    setSubmitting(false);
-    if (!res.ok) {
-      const body = await res.json();
-      setError(typeof body.error === "string" ? body.error : "Couldn't send that request.");
-      return;
-    }
-    setSuccess(true);
-    setEmail("");
-    setCheckResult(null);
-    setTimeout(() => setSuccess(false), 2000);
-  }
-
-  return (
-    <main className="mx-auto max-w-md px-6 py-12">
-      <BackButton fallbackHref="/friends" />
-      <h1 className="font-display text-2xl font-semibold">Add a friend</h1>
-      <p className="mt-1 text-ink/60">They'll need to accept before you can plan events together.</p>
-
-      <form onSubmit={handleSubmit} className="mt-6 grid gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block text-ink/60">Their email</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full rounded-lg border border-line px-3 py-2"
-            placeholder="friend@email.com"
-          />
-        </label>
-
-        {checking && <p className="text-xs text-ink/40">Checking…</p>}
-        {!checking && checkResult?.exists && (
-          <p className="text-xs text-teal">✓ {checkResult.name ?? "This person"} is on Venndra</p>
-        )}
-        {!checking && checkResult && !checkResult.exists && (
-          <p className="text-xs text-ink/40">No Venndra profile found for this email yet</p>
-        )}
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {success && <p className="text-sm text-teal">Request sent!</p>}
-
-        <button
-          type="submit"
-          disabled={submitting || success}
-          className={buttonClass({ variant: "primary", size: "lg", className: "mt-2 w-fit" })}
-        >
-          {submitting ? "Sending…" : "Send request"}
-        </button>
-      </form>
-
-      <SuggestedFriendsSection />
-    </main>
-  );
+  return <NewFriendForm />;
 }

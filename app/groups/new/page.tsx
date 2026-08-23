@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import BackButton from "../../../components/BackButton";
@@ -6,14 +7,18 @@ import GroupForm from "../../../components/GroupForm";
 import { WeeklyHours } from "../../../components/FiltersBuilder";
 
 export default async function NewGroupPage() {
-  // Deliberately no redirect for a missing session -- this page didn't gate on
-  // one before, and the form handles the signed-out case itself. The lookup is
-  // only here to seed the "Custom search window" picker with the user's own
-  // /settings default, so falling through with null is fine.
   const session = await getServerSession(authOptions);
-  const user = session?.user
-    ? await prisma.user.findUnique({ where: { id: (session.user as any).id } })
-    : null;
+  // This used to fall through without a session, on the theory that GroupForm
+  // handled the signed-out case itself. It doesn't: it reads the session only
+  // to prefill the member list with your own address, and a signed-out save
+  // gets a 401 from /api/groups that surfaces as the generic "Couldn't save
+  // that group" -- no mention of signing in, and no way to get there without
+  // losing what's been typed. Gate it here instead, like every other page.
+  if (!session?.user) redirect("/login?callbackUrl=/groups/new");
+
+  // Only here to seed the "Custom search window" picker with the user's own
+  // /settings default.
+  const user = await prisma.user.findUnique({ where: { id: (session.user as any).id } });
 
   return (
     <main className="mx-auto max-w-lg px-6 py-12">

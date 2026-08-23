@@ -52,7 +52,12 @@ export async function POST(req: NextRequest) {
 
   const target = await prisma.user.findUnique({ where: { email: parsed.data.email } });
   if (!target) {
-    return NextResponse.json({ error: `No Venndra profile associated with ${parsed.data.email}` }, { status: 404 });
+    // Worded to match the inline hint on the add-friend form exactly
+    // (components/NewFriendForm) -- that check runs as you type and this one
+    // fires if you submit anyway, so the same fact used to arrive twice in two
+    // different sentences. Change one and change the other. The address isn't
+    // interpolated any more: the only caller has it in a field on screen.
+    return NextResponse.json({ error: "No Venndra profile found for this email yet" }, { status: 404 });
   }
   if (target.id === userId) {
     return NextResponse.json({ error: "You can't add yourself as a friend." }, { status: 400 });
