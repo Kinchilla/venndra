@@ -6,9 +6,17 @@ import { prisma } from "../../../../lib/prisma";
 import { encrypt } from "../../../../lib/crypto";
 import { syncParticipantStatusForUser } from "../../../../lib/participants";
 import { populateCalendarSources } from "../../../../lib/calendarSources";
+import { emailField } from "../../../../lib/emailIdentity";
 
 const appleSchema = z.object({
-  appleId: z.string().email(), // the iCloud email, used as the CalDAV username
+  // The iCloud email, used as the CalDAV username. Normalised (lib/emailIdentity)
+  // because it is stored twice and matched on both times: `caldavUsername` is
+  // what the re-add check below compares, so typing the same Apple ID with a
+  // capital would add a second row for a calendar that's already here; and
+  // `accountEmail` is compared against User.email by lib/identityAccount. Apple
+  // IDs are case-insensitive at Apple, so this changes nothing about whether
+  // the CalDAV login itself succeeds.
+  appleId: emailField,
   appSpecificPassword: z.string().min(16),
   label: z.string().default("iCloud"),
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { normalizeEmail } from "../lib/emailIdentity";
 
 export default function EmailListInput({
   emails,
@@ -37,17 +38,24 @@ export default function EmailListInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
 
+  // Both ways of adding an address route through normalizeEmail -- the same
+  // function the API routes apply (lib/emailIdentity) -- so the `includes`
+  // check below compares the spelling the server will actually store. Without
+  // it, typing an address that's
+  // already a chip with one letter capitalised passes the "already added"
+  // test, shows twice, and is silently collapsed back to one by the server;
+  // the count on screen and the count invited would disagree. It also means
+  // the chip shows the address as it will actually be stored.
   function addEmail(email: string) {
-    if (!emails.includes(email)) onChange([...emails, email]);
+    const normalized = normalizeEmail(email);
+    if (!emails.includes(normalized)) onChange([...emails, normalized]);
     setDraft("");
     setSuggestions([]);
   }
 
   function commit() {
     const trimmed = draft.trim().replace(/,$/, "");
-    if (trimmed && /^\S+@\S+\.\S+$/.test(trimmed) && !emails.includes(trimmed)) {
-      onChange([...emails, trimmed]);
-    }
+    if (trimmed && /^\S+@\S+\.\S+$/.test(trimmed)) addEmail(trimmed);
     setDraft("");
     setSuggestions([]);
   }

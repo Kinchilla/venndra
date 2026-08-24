@@ -1,5 +1,6 @@
 import type { EmailConfig, SendVerificationRequestParams } from "next-auth/providers/email";
 import { fromAddress, sendEmail } from "./email";
+import { emailField, normalizeEmail } from "./emailIdentity";
 import { checkRateLimit } from "./rateLimit";
 
 /**
@@ -67,6 +68,41 @@ export function magicLinkProvider(): EmailConfig {
     // bounding how long a link stays live. Lengthen it with that in mind.
     maxAge: LINK_MAX_AGE_SECONDS,
 
+    /**
+     * How the address typed into the sign-in form becomes the identifier
+     * everything downstream keys on -- the VerificationToken row, the
+     * getUserByEmail lookup, the rate-limit bucket, and the To: header.
+     *
+     * NextAuth applies a normaliser here whether or not one is supplied; its
+     * built-in default (core/routes/signin.js) lowercases and trims, which is
+     * why mixed-case sign-in has always quietly worked. Setting it explicitly
+     * changes two things:
+     *
+     *   The rule now lives in this codebase. It was previously inherited from
+     *   one line inside a dependency, on a code path where nothing else
+     *   normalises -- core/routes/callback.js takes the address straight from
+     *   the URL. A next-auth upgrade that changed that default would have
+     *   silently re-opened duplicate accounts on one mailbox with nothing here
+     *   to notice. (lib/authAdapter.ts now guards the same thing from the
+     *   other side; this is the outer of the two.)
+     *
+     *   A malformed address is rejected before anything is sent, rather than
+     *   after Resend refuses it. Throwing is the documented contract for this
+     *   hook -- signin.js catches it and redirects to ?error=EmailSignin,
+     *   which is where a failed send already lands, so the user-visible
+     *   wording (lib/authErrors.ts) is unchanged. Nothing reaches this from
+     *   the UI, whose field is type="email"; a raw POST is what this catches.
+     *
+     * What it gives up is the default's other trick, `domain.split(",")[0]`,
+     * which quietly rescues "a@b.com,c@d.com" by keeping the first domain.
+     * Rejecting that outright is the better answer: it is not an address
+     * anyone meant to type, and silently mailing a credential to a
+     * half-guessed interpretation of it is the wrong kind of helpful.
+     */
+    normalizeIdentifier(identifier: string): string {
+      return emailField.parse(identifier);
+    },
+
     // Required by NextAuth's EmailConfig type, and never read: `server` is
     // consumed only by the built-in nodemailer-based sendVerificationRequest,
     // which the one below replaces wholesale.
@@ -89,7 +125,14 @@ async function sendVerificationRequest({ identifier, url }: SendVerificationRequ
   // on /login, which lib/authErrors.ts words as "too many requests, wait a
   // minute" -- the honest reading, since a genuine send failure and a rate
   // limit are indistinguishable to the user and both resolve by waiting.
-  const allowed = await checkRateLimit("magic-link", identifier.toLowerCase(), SEND_LIMIT_PER_MINUTE);
+  //
+  // normalizeEmail rather than an inline .toLowerCase(): the bucket key has to
+  // be one string for every spelling of one address or the limit is evaded by
+  // capitalising a letter, and "which string" is a question lib/emailIdentity
+  // answers once for the whole app. normalizeIdentifier above has already
+  // applied it, so this is idempotent -- it stands here so the key doesn't
+  // depend on that having happened.
+  const allowed = await checkRateLimit("magic-link", normalizeEmail(identifier), SEND_LIMIT_PER_MINUTE);
   if (!allowed) {
     throw new Error(`Rate limit: too many magic links requested for ${identifier}`);
   }

@@ -8,7 +8,14 @@ import { pausedInviteeMessage } from "./pause";
  * Returns null when everything checks out.
  */
 export async function validateAllFriends(userId: string, userEmail: string, emails: string[]): Promise<string | null> {
-  const others = emails.filter((e) => e !== userEmail);
+  // De-duplicated before the count below is taken. `users.length !==
+  // others.length` is the check that "every address resolved to a user", and
+  // it only means that if each address appears once -- one address listed
+  // twice makes two entries and one row, and the caller gets told they aren't
+  // friends with someone they are. The routes pass emailListField output,
+  // which is already distinct; this holds the invariant here too, since it's
+  // this function's arithmetic that depends on it.
+  const others = Array.from(new Set(emails)).filter((e) => e !== userEmail);
   if (others.length === 0) return null;
 
   const users = await prisma.user.findMany({ where: { email: { in: others } }, select: { id: true, email: true } });

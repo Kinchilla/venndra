@@ -1,9 +1,12 @@
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import type { Adapter, AdapterSession, VerificationToken } from "next-auth/adapters";
+import type { Adapter, AdapterSession, AdapterUser, VerificationToken } from "next-auth/adapters";
 import { prisma } from "./prisma";
+import { normalizeEmail } from "./emailIdentity";
 
 /**
- * The Prisma adapter, with two behaviours overridden.
+ * The Prisma adapter, with two groups of behaviours overridden.
+ *
+ * Magic-link fixes:
  *
  *   deleteSession         -- swallows "no such row" instead of throwing.
  *   useVerificationToken  -- reads a magic-link token without consuming it, so
@@ -13,12 +16,84 @@ import { prisma } from "./prisma";
  * Both exist because of magic-link sign-in, and both are explained in full at
  * the method they patch. createVerificationToken is overridden only to clean
  * up after the second one.
+ *
+ * Email normalisation:
+ *
+ *   createUser, updateUser, getUserByEmail, and the identifier on all three
+ *   verification-token methods, each of which runs its address through
+ *   lib/emailIdentity's normalizeEmail.
+ *
+ * Together those make this file the door every provider-supplied address
+ * comes through, so no path through NextAuth can write a User.email in a
+ * spelling a later lookup won't find. See issue #25, and the note at the
+ * bottom of this file for what stock next-auth does instead.
  */
 export function prismaAdapterWithMagicLinkFixes(): Adapter {
   const base = PrismaAdapter(prisma);
 
   return {
     ...base,
+
+    /**
+     * Lowercase the address before the row is written. This is the write half
+     * of the invariant lib/emailIdentity describes; getUserByEmail below is
+     * the read half, and neither is any use without the other.
+     *
+     * The stock adapter is `createUser: (data) => p.user.create({ data })` --
+     * it stores whatever NextAuth handed it, and NextAuth hands it whatever
+     * the provider claimed. next-auth/providers/google.js returns
+     * `email: profile.email` straight off the ID token with no normalisation,
+     * and azure-ad is the same shape; Entra's `email` is admin-settable and
+     * documented as unverified (see lib/auth.ts), which makes it the likelier
+     * source of a capitalised claim. Whether either provider actually emits
+     * one is not something this app can find out in advance, and with this
+     * override it no longer has to: a mixed-case claim lands as a lowercase
+     * row either way.
+     *
+     * What that prevents, concretely: a User created as "Person@x.com" is
+     * invisible to a later magic-link sign-in, because next-auth's sign-in
+     * route lowercases the address typed into the form before looking it up.
+     * The lookup misses, the callback takes its createUser branch, and the
+     * mailbox ends up with two Venndra accounts -- the exact situation
+     * lib/auth.ts spends a page explaining this app cannot represent.
+     */
+    async createUser(data: Omit<AdapterUser, "id">): Promise<AdapterUser> {
+      return base.createUser!({ ...data, email: normalizeEmail(data.email) });
+    },
+
+    /**
+     * Same rule on update. Nothing changes an address today -- NextAuth calls
+     * this to stamp emailVerified, and the app's own PATCH /api/me updates
+     * name, timezone and filters through Prisma directly. It is here so that
+     * whatever adds "change your email address" later (issue #5) inherits the
+     * guarantee instead of having to remember it.
+     *
+     * `email` is optional on the partial NextAuth passes, so this normalises
+     * only when one is actually present -- spreading a normalised `undefined`
+     * over it would blank the column.
+     */
+    async updateUser(data: Partial<AdapterUser> & { id: string }): Promise<AdapterUser> {
+      return base.updateUser!(data.email ? { ...data, email: normalizeEmail(data.email) } : data);
+    },
+
+    /**
+     * The read half. Normalising here is what actually fixes sign-in, because
+     * the address this receives has not always been through next-auth's own
+     * normaliser: core/routes/signin.js lowercases what the form submitted,
+     * but core/routes/callback.js passes `query.email` from the link's URL
+     * straight through untouched.
+     *
+     * Note this deliberately does NOT become a case-insensitive query. It
+     * normalises the needle and still matches exactly, so it keeps using the
+     * unique index on User.email rather than falling back to a scan, and it
+     * stays honest about the fact that the stored value is expected to be
+     * lowercase already. If a mixed-case row somehow exists, this will not
+     * find it -- and that is the right failure, because such a row is a bug
+     * to be corrected rather than a shape to accommodate.
+     */
+    async getUserByEmail(email: string): Promise<AdapterUser | null> {
+      return base.getUserByEmail!(normalizeEmail(email));
+    },
 
     /**
      * @next-auth/prisma-adapter implements deleteSession as a bare
@@ -100,10 +175,19 @@ export function prismaAdapterWithMagicLinkFixes(): Adapter {
      * loss is the ability to *detect* a second use, which nothing acted on
      * anyway. Weigh that against locking people out for good, which is the
      * failure this replaces.
+     *
+     * The identifier is normalised for the same reason getUserByEmail is:
+     * core/routes/callback.js reads it from `query.email` and passes it
+     * through raw, so the address in a clicked link is whatever is in the URL
+     * bar. Without this, a link whose address had been re-cased anywhere
+     * between the inbox and the click would miss the row stored under the
+     * canonical spelling and be reported as expired -- a confusing failure for
+     * a link that is perfectly valid. Safe to accept, because the sign-in that
+     * follows resolves the user through getUserByEmail, which normalises too.
      */
     async useVerificationToken(params: { identifier: string; token: string }): Promise<VerificationToken | null> {
       return prisma.verificationToken.findUnique({
-        where: { identifier_token: { identifier: params.identifier, token: params.token } },
+        where: { identifier_token: { identifier: normalizeEmail(params.identifier), token: params.token } },
       });
     },
 
@@ -123,12 +207,21 @@ export function prismaAdapterWithMagicLinkFixes(): Adapter {
      * [identifier, token] unique index, so this is an index range delete. A
      * global sweep on `expires` -- which is indexed by nothing -- would table
      * scan on every single sign-in request.
+     *
+     * Normalising the identifier on the way in is what makes the sweep and
+     * useVerificationToken agree on which rows belong to one address, and it
+     * keeps the stored spelling canonical so the lookup can stay an exact
+     * match. Redundant in practice -- lib/magicLink.ts's normalizeIdentifier
+     * has already done it by the time NextAuth gets here -- and kept because
+     * "every identifier in this table is lowercase" is a property worth
+     * holding locally rather than inferring from a caller.
      */
     async createVerificationToken(token: VerificationToken): Promise<VerificationToken> {
+      const identifier = normalizeEmail(token.identifier);
       await prisma.verificationToken.deleteMany({
-        where: { identifier: token.identifier, expires: { lt: new Date() } },
+        where: { identifier, expires: { lt: new Date() } },
       });
-      return prisma.verificationToken.create({ data: token });
+      return prisma.verificationToken.create({ data: { ...token, identifier } });
     },
   };
 }

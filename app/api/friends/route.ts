@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
+import { emailField } from "../../../lib/emailIdentity";
 
 const USER_SELECT = { id: true, name: true, email: true, image: true, pausedAt: true };
 
@@ -40,7 +41,11 @@ export async function GET() {
   return NextResponse.json({ friends, pendingSent, pendingReceived });
 }
 
-const requestSchema = z.object({ email: z.string().email() });
+// emailField, not z.string().email(): the address is about to be used as a
+// lookup key, and typing a friend's address the way it appears in their
+// signature -- "Friend@gmail.com" -- used to return "No Venndra profile found
+// for this email yet" for someone who plainly had one. Issue #25.
+const requestSchema = z.object({ email: emailField });
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);

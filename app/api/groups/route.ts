@@ -6,10 +6,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { recordKnownContacts } from "../../../lib/knownContacts";
 import { validateAllFriends } from "../../../lib/friends";
+import { emailListField } from "../../../lib/emailIdentity";
 
 const groupSchema = z.object({
   name: z.string().min(1).max(60),
-  emails: z.array(z.string().email()).min(1).max(50),
+  // Normalised and de-duplicated -- see lib/emailIdentity.
+  emails: emailListField,
   // Nullable, not just optional: null is how the client says "this group
   // has no search window", which has to be distinguishable from the field
   // simply being absent.

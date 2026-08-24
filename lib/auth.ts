@@ -5,6 +5,7 @@ import { prisma } from "./prisma";
 import { syncParticipantStatusForUser } from "./participants";
 import { populateCalendarSources } from "./calendarSources";
 import { magicLinkProvider } from "./magicLink";
+import { normalizeEmail } from "./emailIdentity";
 import { prismaAdapterWithMagicLinkFixes } from "./authAdapter";
 import { clearAccountAuthFailed } from "./calendar/authHealth";
 
@@ -223,7 +224,13 @@ export const authOptions: NextAuthOptions = {
           // owning user's email is the WRONG answer for the new calendar.
           // Left null if the provider returned no email (happens with some
           // Microsoft work/school accounts); the UI falls back to `label`.
-          accountEmail: profile?.email ?? null,
+          //
+          // Normalised on the way in for the same reason User.email is (see
+          // lib/emailIdentity): this column is not only shown, it is matched
+          // -- lib/identityAccount.ts compares it against User.email exactly
+          // -- and a provider returning a capitalised claim would make that
+          // comparison miss for reasons no reader of either file could see.
+          accountEmail: profile?.email ? normalizeEmail(profile.email) : null,
           label: provider === "GOOGLE" ? "Google Calendar" : "Outlook Calendar",
         },
       });

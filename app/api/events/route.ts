@@ -6,6 +6,7 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { recordKnownContacts } from "../../../lib/knownContacts";
 import { validateAllFriends, validateNoPausedInvitees } from "../../../lib/friends";
+import { emailListField } from "../../../lib/emailIdentity";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -22,7 +23,9 @@ const eventSchema = z
     minAttendees: z.number().int().min(1).optional(),
     votingEnabled: z.boolean().default(false),
     voteTopX: z.number().int().min(1).max(10).optional(),
-    emails: z.array(z.string().email()).min(1).max(50), // whoever's invited, including the creator if they chose to keep themselves in it
+    // emailListField normalises and de-duplicates (lib/emailIdentity) --
+    // whoever's invited, including the creator if they chose to keep themselves in it
+    emails: emailListField,
   })
   .refine((data) => data.searchEnd >= data.searchStart, {
     message: "End date can't be before the start date",
@@ -64,7 +67,13 @@ export async function POST(req: NextRequest) {
   // in and connect a calendar via the join link. The creator is only
   // included if the client included them -- the "new event" form defaults
   // to pre-filling the creator's own email, but they're free to remove it.
-  const allEmails = Array.from(new Set(parsed.data.emails));
+  // Already normalised and de-duplicated by emailListField, so this is the
+  // list of distinct people and nothing further has to collapse it. It used to
+  // do its own `new Set` here; that moved into the schema when normalisation
+  // arrived, since two capitalisations of one address are a duplicate that
+  // only becomes visible after normalising, and every route taking a list of
+  // invitees needs the same answer.
+  const allEmails = parsed.data.emails;
 
   // A threshold higher than the number of people invited can never be met, so
   // the search would return zero slots forever with nothing on screen
