@@ -41,6 +41,24 @@ import { z } from "zod";
  * Everything downstream reads addresses back out of the database, so once
  * those three are covered the rest of the app compares normalised against
  * normalised without having to know this file exists.
+ *
+ * WHY THE DATABASE DOESN'T ENFORCE IT. The obvious backstop is a unique index
+ * on lower(email), or a CHECK constraint that the column equals its own
+ * lowercase -- either would make a non-canonical row impossible rather than
+ * merely unwritten, and catch a call site added later that forgets. Both were
+ * considered and deliberately not taken, for one reason: Prisma cannot
+ * represent an expression index or a CHECK constraint in schema.prisma. Such
+ * a thing can only be added as hand-written SQL inside a migration, which
+ * leaves it existing in the database with nothing in the schema describing
+ * it, and the next `prisma migrate dev` diffs the schema against the migration
+ * history and generates a migration that DROPS it -- silently, with no
+ * warning, in the middle of an unrelated change. A guarantee that disappears
+ * without telling anybody is worse than one that was never claimed.
+ *
+ * So the guarantee is this file plus the three doors above, and the price is
+ * that it holds only as long as new code goes through them. If Prisma gains
+ * support for either, this is worth revisiting -- the reasoning is the
+ * tooling, not the merits.
  */
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
