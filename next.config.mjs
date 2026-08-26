@@ -1,5 +1,18 @@
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Turbopack (the default builder as of Next 16) infers the project root by
+  // walking up for lockfiles, and there is a stray package-lock.json in the
+  // home directory above this repo -- so it picked C:\Users\dckin and warned
+  // that it was ignoring it. Pinning the root to this file's own directory
+  // stops the inference, and stops an unrelated file outside the repo from
+  // being able to move the build root.
+  turbopack: {
+    root: path.dirname(fileURLToPath(import.meta.url)),
+  },
+
   experimental: {
     // Almost every page here is a server component reading per-user data
     // (friends, events, groups...) that can change from an action taken one

@@ -45,7 +45,8 @@ import { upcomingConfirmedWhere } from "../../../../../lib/eventLifecycle";
  *      went stale: both still claimed the sign-in account could never be
  *      disconnected after that stopped being true.
  */
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

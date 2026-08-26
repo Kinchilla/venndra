@@ -15,11 +15,12 @@ import ConnectedAccountsSection from "../../components/ConnectedAccountsSection"
 import LogoutButton from "../../components/LogoutButton";
 import AccountManagement from "../../components/AccountManagement";
 
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams?: { connectError?: string; needsCalendar?: string };
-}) {
+export default async function SettingsPage(
+  props: {
+    searchParams?: Promise<{ connectError?: string; needsCalendar?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login?callbackUrl=/settings");
 

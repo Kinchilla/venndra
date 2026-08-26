@@ -15,7 +15,8 @@ import PhoneVerifyButton from "../../components/PhoneVerifyButton";
  * number. This page is deliberately dull: it says which number, and it has one
  * button.
  */
-export default async function VerifyPhonePage({ searchParams }: { searchParams?: { token?: string } }) {
+export default async function VerifyPhonePage(props: { searchParams?: Promise<{ token?: string }> }) {
+  const searchParams = await props.searchParams;
   const token = searchParams?.token;
 
   const session = await getServerSession(authOptions);

@@ -5,7 +5,8 @@ import { prisma } from "../../../lib/prisma";
 import BackButton from "../../../components/BackButton";
 import GroupForm from "../../../components/GroupForm";
 
-export default async function EditGroupPage({ params }: { params: { id: string } }) {
+export default async function EditGroupPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect(`/login?callbackUrl=/groups/${params.id}`);
 

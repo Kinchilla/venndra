@@ -6,13 +6,14 @@ import EventResults from "../../../components/EventResults";
 import JoinPrompt from "../../../components/JoinPrompt";
 import BackButton from "../../../components/BackButton";
 
-export default async function EventPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { justCreated?: string };
-}) {
+export default async function EventPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ justCreated?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect(`/login?callbackUrl=/events/${params.id}`);
 
