@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
 import { PAUSED_TAG } from "../lib/pause";
+import { displayName } from "../lib/displayName";
 import Avatar from "./Avatar";
 
 type FriendUser = { id: string; name: string | null; email: string | null; image: string | null; paused: boolean };
@@ -52,7 +53,7 @@ export default function FriendChip({
     act("accept", `/api/friends/${friendshipId}/accept`, "POST", "Couldn't accept this request.");
   }
 
-  const displayName = user.name ?? user.email ?? "Someone";
+  const label = displayName(user);
 
   return (
     <div className="rounded-xl border border-line bg-white px-4 py-3">
@@ -63,13 +64,17 @@ export default function FriendChip({
             own buttons at full strength says exactly that -- removing a friend
             is unaffected by whether they've paused. */}
         <div className={`flex min-w-0 items-center gap-2.5 ${user.paused ? "opacity-50" : ""}`}>
-          <Avatar image={user.image} name={user.name} email={user.email} size={32} />
+          <Avatar image={user.image} name={label} colorKey={user.id} size={32} />
+          {/* One line, not two. There used to be an email address under the
+              name here, and issue #6 is that it had no business being there:
+              Suggested Friends offers you friends-of-friends, so accepting one
+              taught you an address its owner had never given you. What's left
+              is whatever they chose to be called -- see lib/displayName. */}
           <div className="min-w-0">
             <div className="truncate text-sm font-medium">
-              {displayName}
+              {label}
               {user.paused && <span className="ml-2 text-xs font-normal text-ink/40">· {PAUSED_TAG}</span>}
             </div>
-            {user.name && <div className="truncate text-xs text-ink/40">{user.email}</div>}
           </div>
         </div>
 

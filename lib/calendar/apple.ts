@@ -105,7 +105,27 @@ export async function getAppleBusyIntervals(
 
 class AppleWriteConflictError extends Error {}
 
-/** Builds the plain-text participant list appended to an Apple event's DESCRIPTION. */
+/**
+ * Builds the plain-text participant list appended to an Apple event's
+ * DESCRIPTION.
+ *
+ * Deliberately still prints email addresses, and is the one place in Venndra
+ * that does after issue #6 stripped them from every people-list. Two things
+ * make it different, and both have to hold for the exemption to stand:
+ *
+ *   Nobody but the organizer ever reads it. This VEVENT carries no ATTENDEE
+ *   or ORGANIZER properties (see the module note above), so it is never
+ *   distributed -- it exists on the organizer's own iCloud calendar and
+ *   nowhere else. There is no second reader to leak to.
+ *
+ *   The addresses are the point. iCloud can't send invites through Venndra,
+ *   so this list is what the organizer works from when inviting everyone by
+ *   hand. A list of display names would be unusable for that -- it would name
+ *   people while withholding the one detail needed to actually reach them.
+ *
+ * If Apple write-back ever starts emitting ATTENDEE properties, the first
+ * condition breaks and this has to go through lib/displayName like the rest.
+ */
 export function buildAppleDescriptionText(
   baseDescription: string | null | undefined,
   participants: { email: string; name: string | null }[]

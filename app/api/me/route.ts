@@ -14,7 +14,26 @@ import { deleteUpstreamEvent, removeAttendeeFromUpstreamEvent, UpstreamEvent } f
 const weeklyHoursSchema = z.record(z.array(z.tuple([z.string(), z.string()])));
 
 const schema = z.object({
-  name: z.string().min(1).max(80).optional(),
+  // Trimmed, and an empty result becomes null rather than "".
+  //
+  // Both halves matter. A whitespace-only name reads as set to every
+  // `!= null` test in the app: it would silence components/DisplayNameBanner
+  // while leaving the person just as unidentifiable as before, which is the
+  // one outcome issue #18 is trying to avoid.
+  //
+  // And clearing the field has to be allowed to mean something, because a
+  // display name is optional here by design -- someone who doesn't mind
+  // friends seeing their address shouldn't have to invent a name to get past
+  // a validator. Rejecting "" instead would have trapped exactly the people
+  // who have no name yet: the field sits in the same form as the timezone, so
+  // a hard reject would have blocked them from saving an unrelated setting
+  // until they gave in and named themselves.
+  name: z
+    .string()
+    .max(80)
+    .transform((v) => v.trim() || null)
+    .nullable()
+    .optional(),
   timezone: z.string().min(1).optional(),
   defaultSearchFilters: weeklyHoursSchema.nullable().optional(),
 });

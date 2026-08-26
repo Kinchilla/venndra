@@ -7,8 +7,13 @@ import { WeeklyHours } from "./FiltersBuilder";
 import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
 import Avatar from "./Avatar";
+import { displayName } from "../lib/displayName";
 
-type Member = { email: string; name: string | null; image: string | null };
+// `email` stays on the type because it's this list's identity key -- a saved
+// group is stored as a bare array of addresses (SavedGroup.emails, no foreign
+// key), so it's the only thing that can key the rows or match them back to a
+// user. It is no longer rendered: see displayName below.
+type Member = { email: string; userId: string | null; name: string | null; image: string | null };
 
 const DAY_LABELS: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 const DAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -44,7 +49,7 @@ export default function GroupChip({
     }
   }
 
-  const memberNames = members.map((m) => m.name ?? m.email).join(", ");
+  const memberNames = members.map(displayName).join(", ");
   const dayLines: string[] = [];
   for (const day of DAY_ORDER) {
     for (const [start, end] of filters[day] ?? []) {
@@ -69,8 +74,8 @@ export default function GroupChip({
               <div className="grid grid-cols-1 gap-2 sm:flex-1">
                 {members.map((m) => (
                   <div key={m.email} className="flex items-center gap-2.5">
-                    <Avatar image={m.image} name={m.name} email={m.email} size={24} />
-                    <span className="text-ink/70">{m.name ?? m.email}</span>
+                    <Avatar image={m.image} name={displayName(m)} colorKey={m.userId} size={24} />
+                    <span className="text-ink/70">{displayName(m)}</span>
                   </div>
                 ))}
               </div>

@@ -8,6 +8,7 @@ import BackButton from "../../components/BackButton";
 import GroupChip from "../../components/GroupChip";
 import Paginated from "../../components/Paginated";
 import ConnectCalendarBanner from "../../components/ConnectCalendarBanner";
+import DisplayNameBanner from "../../components/DisplayNameBanner";
 
 export default async function GroupsPage() {
   const session = await getServerSession(authOptions);
@@ -23,7 +24,7 @@ export default async function GroupsPage() {
   const users = allEmails.length
     ? await prisma.user.findMany({
         where: { email: { in: allEmails } },
-        select: { email: true, name: true, image: true },
+        select: { id: true, email: true, name: true, image: true },
       })
     : [];
   const byEmail = new Map(users.map((u) => [u.email, u]));
@@ -40,6 +41,8 @@ export default async function GroupsPage() {
 
       <ConnectCalendarBanner />
 
+      <DisplayNameBanner />
+
       <div className="mt-8 grid grid-cols-1 gap-2">
         <Paginated>
           {groups.map((g) => (
@@ -49,6 +52,7 @@ export default async function GroupsPage() {
               name={g.name}
               members={g.emails.map((email) => ({
                 email,
+                userId: byEmail.get(email)?.id ?? null,
                 name: byEmail.get(email)?.name ?? null,
                 image: byEmail.get(email)?.image ?? null,
               }))}

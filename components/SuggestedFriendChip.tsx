@@ -6,7 +6,15 @@ import { buttonClass } from "../lib/buttonStyles";
 import Avatar from "./Avatar";
 import SessionEndedNotice from "./SessionEndedNotice";
 
-type SuggestedUser = { id: string; name: string | null; email: string | null; image: string | null };
+// One already-resolved label, no raw `name` and no `email`, and that shape is
+// load-bearing rather than tidiness. Everyone in this list is a
+// friend-of-a-friend the viewer has never met, so an address reaching this
+// component is issue #6's leak in its original form -- and it would be a leak
+// whether or not the markup rendered it. The server picks the single string
+// the viewer may see (app/api/friends/suggestions), and the absence of the
+// other fields from this type is what stops it quietly sending them again
+// without this file failing to compile.
+type SuggestedUser = { id: string; displayName: string; image: string | null };
 
 export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedUser; onGone: (userId: string) => void }) {
   // `hold` rather than `commit` on success: this chip doesn't wait on a server
@@ -22,14 +30,17 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
   const [sessionEnded, setSessionEnded] = useState<string | null>(null);
 
   async function handleSend() {
-    if (!user.email) return;
     begin("send");
     setError(null);
     setSessionEnded(null);
+    // By id, not by address -- the browser hasn't got the address and that is
+    // the point (issue #6). This also retires a silent no-op that used to sit
+    // above: the old version bailed out when a suggestion had no email, which
+    // rendered a "Send request" button that did nothing when pressed.
     const res = await fetch("/api/friends", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: user.email }),
+      body: JSON.stringify({ userId: user.id }),
     });
     if (res.ok) {
       hold();
@@ -72,15 +83,12 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
     setError("Couldn't dismiss this suggestion.");
   }
 
-  const displayName = user.name ?? user.email ?? "Someone";
-
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white px-4 py-3">
       <div className="flex items-center gap-2.5">
-        <Avatar image={user.image} name={user.name} email={user.email} size={32} />
+        <Avatar image={user.image} name={user.displayName} colorKey={user.id} size={32} />
         <div>
-          <div className="text-sm font-medium">{displayName}</div>
-          {user.name && <div className="text-xs text-ink/40">{user.email}</div>}
+          <div className="text-sm font-medium">{user.displayName}</div>
         </div>
       </div>
 

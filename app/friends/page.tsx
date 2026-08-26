@@ -8,6 +8,7 @@ import BackButton from "../../components/BackButton";
 import FriendChip from "../../components/FriendChip";
 import Paginated from "../../components/Paginated";
 import ConnectCalendarBanner from "../../components/ConnectCalendarBanner";
+import DisplayNameBanner from "../../components/DisplayNameBanner";
 
 export default async function FriendsPage() {
   const session = await getServerSession(authOptions);
@@ -54,6 +55,8 @@ export default async function FriendsPage() {
       </div>
 
       <ConnectCalendarBanner />
+
+      <DisplayNameBanner />
 
       <FriendSection title="Friends" entries={friends} kind="friend" />
       <FriendSection title="Sent requests" entries={pendingSent} kind="sent" />

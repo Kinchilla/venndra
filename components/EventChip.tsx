@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
 import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
+import { displayName } from "../lib/displayName";
 
 type Participant = {
   email: string;
@@ -13,6 +14,11 @@ type Participant = {
   status: "INVITED" | "CONNECTED";
   name: string | null;
 };
+// The reassign picker, which only the organizer can open. `email` survives
+// issue #6's sweep here because it isn't a disclosure: every candidate is
+// someone the organizer personally invited, from addresses they already had.
+// It's the React key for a candidate with no user row, and displayName's
+// fallback for the same case.
 type Candidate = {
   userId: string | null;
   name: string | null;
@@ -278,9 +284,16 @@ export default function EventChip({ event }: { event: EventChipData }) {
               <span className="text-ink/50">Organizer: </span>
               {event.organizerName}
             </p>
+            {/* Names, not addresses. This list is shown to everyone on the
+                event, so the old version handed each attendee the email of
+                every other attendee -- most of whom they had never invited
+                and might not know at all. Issue #6. Everyone here is a
+                Venndra account (lib/friends.validateAllFriends refuses an
+                invite otherwise), so there is always a display name or a
+                deliberate choice to show an address in its place. */}
             <p className="mt-1.5 text-ink/70">
               <span className="text-ink/50">Invited: </span>
-              {event.participants.map((p) => p.email).join(", ")}
+              {event.participants.map(displayName).join(", ")}
             </p>
             <p className="mt-1.5 text-ink/70">
               <span className="text-ink/50">Length: </span>
@@ -464,7 +477,7 @@ function ReassignPicker({
       ) : (
         <div className="grid grid-cols-1 gap-2.5">
           {candidates.map((c) => {
-            const label = c.name ?? c.email;
+            const label = displayName(c);
             return (
               <div key={c.userId ?? c.email} className={`flex items-center justify-between gap-3 ${c.eligible ? "" : "opacity-50"}`}>
                 <div>

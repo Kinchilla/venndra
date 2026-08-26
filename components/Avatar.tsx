@@ -33,10 +33,16 @@ const tints = [
 ];
 
 /**
- * Keyed on the email rather than the name, for two reasons: the same person
- * keeps the same colour everywhere they appear even where one view has their
- * name and another only has the address, and editing your name on /settings
- * doesn't make the circle change colour under you mid-keystroke.
+ * Keyed on whatever the caller passes as `colorKey`, which should be the
+ * user's id wherever one is known.
+ *
+ * It used to be the email, so that the same person kept the same colour in a
+ * view that had their name and a view that had only their address. Issue #6
+ * removed the second kind of view -- most lists no longer receive an email at
+ * all -- so keying on it now means the same person hashes differently
+ * depending on which page you're looking at. An id is what the email was
+ * standing in for: stable, present everywhere, and unlike a name it doesn't
+ * change colour under you mid-keystroke while you edit it on /settings.
  *
  * djb2, and deliberately not something like a random pick memoised per render:
  * the header is a server component and the chips are client ones, so the same
@@ -49,25 +55,33 @@ function tintFor(key: string) {
   return tints[Math.abs(hash) % tints.length];
 }
 
-export function initialsFor(name: string | null | undefined, email: string | null | undefined) {
-  const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  if (words.length > 0) {
-    // First and last word, so "Ada Byron King" reads AK rather than AB.
-    const letters = words.length === 1 ? words[0][0] : words[0][0] + words[words.length - 1][0];
-    return letters.toUpperCase();
-  }
-  return (email ?? "").trim()[0]?.toUpperCase() ?? "";
+/**
+ * Initials for an already-resolved display string -- the output of
+ * lib/displayName, not a raw `User.name`. That matters for the accounts that
+ * have no name: what they're shown as is their email address, so what this
+ * gets handed is an address and the first letter of it is the right initial.
+ * Working that out here would mean re-deciding, in a second place, the
+ * question lib/displayName exists to answer once.
+ */
+export function initialsFor(label: string | null | undefined) {
+  const words = (label ?? "").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  // First and last word, so "Ada Byron King" reads AK rather than AB.
+  const letters = words.length === 1 ? words[0][0] : words[0][0] + words[words.length - 1][0];
+  return letters.toUpperCase();
 }
 
 export default function Avatar({
   image,
   name,
-  email,
+  colorKey,
   size = 24,
 }: {
   image: string | null | undefined;
+  /** Already resolved through lib/displayName -- see initialsFor above. */
   name: string | null | undefined;
-  email: string | null | undefined;
+  /** Stable per-person hash input; the user's id where there is one. */
+  colorKey?: string | null | undefined;
   size?: keyof typeof sizes;
 }) {
   // shrink-0 matters: the avatar always sits in a flex row next to text that
@@ -80,10 +94,9 @@ export default function Avatar({
     return <img src={image} alt="" referrerPolicy="no-referrer" className={`${shape} object-cover`} />;
   }
 
-  // An account with neither an email nor a name has no initial to show and
-  // nothing stable to hash, so it keeps the old neutral circle -- a coloured
-  // one would imply an identity that isn't there.
-  const key = (email ?? name ?? "").trim().toLowerCase();
+  // An account with nothing to hash and no label keeps the old neutral circle
+  // -- a coloured one would imply an identity that isn't there.
+  const key = (colorKey ?? name ?? "").trim().toLowerCase();
   const tint = key ? tintFor(key) : "bg-line text-ink/60";
 
   return (
@@ -91,7 +104,7 @@ export default function Avatar({
       aria-hidden="true"
       className={`${shape} ${tint} inline-flex items-center justify-center font-medium leading-none`}
     >
-      {initialsFor(name, email)}
+      {initialsFor(name)}
     </span>
   );
 }

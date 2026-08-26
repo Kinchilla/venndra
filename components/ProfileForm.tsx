@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
 import { buttonClass } from "../lib/buttonStyles";
+import { displayName } from "../lib/displayName";
 import Avatar from "./Avatar";
 import PhoneField from "./PhoneField";
 
@@ -81,21 +82,35 @@ export default function ProfileForm({
       <div className="flex items-center gap-4">
         {/* Deliberately the live `name` state rather than initialName, so the
             initials track what's in the field as it's edited. */}
-        <Avatar image={image} name={name} email={email} size={56} />
+        {/* displayName rather than the raw field, so an account with no name
+            set shows the same initial its friends see (the first letter of
+            the address) instead of an empty circle. */}
+        <Avatar image={image} name={displayName({ name, email })} size={56} />
         <p className="text-xs text-ink/40">
           Your picture comes from whichever account you signed in with — Venndra doesn't support uploading a
           separate one yet.
         </p>
       </div>
 
+      {/* Not `required`. A display name is optional on purpose (issue #18):
+          leaving it blank means friends and event attendees see the email
+          address instead, which is a trade some people will happily make and
+          none of Venndra's business to override. The hint below is what makes
+          that a choice rather than a surprise -- it's the same message
+          components/DisplayNameBanner carries, stated where the field is. */}
       <label className="mt-5 block text-sm">
-        <span className="mb-1 block text-ink/60">Name</span>
+        <span className="mb-1 block text-ink/60">Display name</span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          required
+          maxLength={80}
           className="w-full rounded-lg border border-line px-3 py-2"
         />
+        <span className="mt-1 block text-xs text-ink/40">
+          {name.trim()
+            ? "What friends and event attendees see. It doesn't have to be your real name."
+            : `Leave this blank and friends will see ${email ?? "your email address"} instead. A name doesn't have to be your real one — it just saves you from sharing your address.`}
+        </span>
       </label>
 
       <label className="mt-4 block text-sm">

@@ -41,11 +41,29 @@ export async function GET() {
   return NextResponse.json({ friends, pendingSent, pendingReceived });
 }
 
-// emailField, not z.string().email(): the address is about to be used as a
-// lookup key, and typing a friend's address the way it appears in their
-// signature -- "Friend@gmail.com" -- used to return "No Venndra profile found
-// for this email yet" for someone who plainly had one. Issue #25.
-const requestSchema = z.object({ email: emailField });
+// Two ways to name the person you're adding, and the difference is issue #6.
+//
+// `email` is the add-a-friend form: you type an address you already know, and
+// it's the only thing you have to go on. emailField, not z.string().email():
+// the address is about to be used as a lookup key, and typing a friend's
+// address the way it appears in their signature -- "Friend@gmail.com" -- used
+// to return "No Venndra profile found for this email yet" for someone who
+// plainly had one. Issue #25.
+//
+// `userId` is Suggested Friends, and it exists so that flow can stop being
+// handed addresses. Suggestions are friends-of-friends -- people you have
+// never met and whose email you have no business receiving -- but requesting
+// one used to mean POSTing their address, so the suggestions endpoint had to
+// send it to the browser first. Hiding it in the markup would have changed
+// nothing: it was in the JSON. Accepting an id instead is what let
+// app/api/friends/suggestions stop selecting the column at all.
+//
+// A cuid is not a secret, but it isn't guessable either, and it discloses
+// nothing on its own -- which is the whole difference from an address.
+const requestSchema = z.union([
+  z.object({ email: emailField }),
+  z.object({ userId: z.string().min(1) }),
+]);
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -55,13 +73,20 @@ export async function POST(req: NextRequest) {
   const parsed = requestSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
 
-  const target = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+  const target = await prisma.user.findUnique({
+    where: "userId" in parsed.data ? { id: parsed.data.userId } : { email: parsed.data.email },
+  });
   if (!target) {
     // Worded to match the inline hint on the add-friend form exactly
     // (components/NewFriendForm) -- that check runs as you type and this one
     // fires if you submit anyway, so the same fact used to arrive twice in two
     // different sentences. Change one and change the other. The address isn't
     // interpolated any more: the only caller has it in a field on screen.
+    //
+    // The id branch reaches this only if a suggestion went stale between being
+    // listed and being clicked -- the account was deleted in between. Same
+    // 404, and the wording is odd for that case but it is not a case anyone
+    // sees: the chip disappears on the refetch either way.
     return NextResponse.json({ error: "No Venndra profile found for this email yet" }, { status: 404 });
   }
   if (target.id === userId) {

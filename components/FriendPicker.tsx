@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Avatar from "./Avatar";
+import { displayName } from "../lib/displayName";
 import { PAUSED_TAG, pausedInviteeMessage } from "../lib/pause";
 
 type Friend = { id: string; name: string | null; email: string | null; image: string | null; paused: boolean };
@@ -45,6 +46,16 @@ export default function FriendPicker({
   }, [query]);
 
   const available = useMemo(() => (friends ?? []).filter((f) => f.email && !emails.includes(f.email)), [friends, emails]);
+  // Still matches on email even though no email is rendered any more, and that
+  // split is deliberate -- it's the "does email stay searchable" question
+  // issue #6 left open, answered as searchable but not displayable.
+  //
+  // The two aren't the same risk. Displaying an address hands it to someone
+  // who didn't have it; matching one only confirms an address the searcher had
+  // to type from memory, about a person who is already their friend. Taking it
+  // away would break the perfectly ordinary case of knowing someone's address
+  // and not which of their names they signed up under, and would protect
+  // nobody, since this list is the searcher's own friends either way.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return available;
@@ -75,7 +86,7 @@ export default function FriendPicker({
           <div className="flex flex-wrap gap-1.5">
             {includesSelf && currentUser && (
               <span className="flex items-center gap-1.5 rounded-full bg-amber/10 px-2.5 py-1 text-xs text-amber">
-                <Avatar image={currentUser.image} name={currentUser.name} email={currentUser.email} size={16} />
+                <Avatar image={currentUser.image} name={displayName(currentUser)} size={16} />
                 Me{currentUser.name ? ` (${currentUser.name})` : ""}
                 <button type="button" onClick={() => onChange(emails.filter((e) => e !== currentUser.email))} aria-label="Remove yourself">
                   ×
@@ -95,11 +106,11 @@ export default function FriendPicker({
                 }`}
               >
                 <span className={f.paused ? "opacity-50" : undefined}>
-                  <Avatar image={f.image} name={f.name} email={f.email} size={16} />
+                  <Avatar image={f.image} name={displayName(f)} colorKey={f.id} size={16} />
                 </span>
-                {f.name ?? f.email}
+                {displayName(f)}
                 {f.paused && <span className="text-ink/30">· {PAUSED_TAG}</span>}
-                <button type="button" onClick={() => onChange(emails.filter((e) => e !== f.email))} aria-label={`Remove ${f.name ?? f.email}`}>
+                <button type="button" onClick={() => onChange(emails.filter((e) => e !== f.email))} aria-label={`Remove ${displayName(f)}`}>
                   ×
                 </button>
               </span>
@@ -134,9 +145,9 @@ export default function FriendPicker({
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-ink/80 hover:bg-paper disabled:cursor-not-allowed disabled:text-ink/30 disabled:hover:bg-transparent"
                 >
                   <span className={f.paused ? "opacity-40" : undefined}>
-                    <Avatar image={f.image} name={f.name} email={f.email} size={20} />
+                    <Avatar image={f.image} name={displayName(f)} colorKey={f.id} size={20} />
                   </span>
-                  <span>{f.name ?? f.email}</span>
+                  <span>{displayName(f)}</span>
                   {f.paused && <span className="ml-auto text-xs text-ink/30">{PAUSED_TAG}</span>}
                 </button>
               </li>
@@ -156,7 +167,7 @@ export default function FriendPicker({
           named in the sentence. */}
       {pausedSelected.length > 0 && (
         <p className="mt-1.5 text-xs text-amber">
-          {pausedInviteeMessage(pausedSelected.map((f) => f.name ?? f.email ?? "Someone"))} Remove{" "}
+          {pausedInviteeMessage(pausedSelected.map(displayName))} Remove{" "}
           {pausedSelected.length === 1 ? "them" : "them all"} to continue.
         </p>
       )}

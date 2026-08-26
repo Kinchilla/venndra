@@ -4,8 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
 import { buttonClass } from "../lib/buttonStyles";
+import { displayName } from "../lib/displayName";
 
 type ParticipantStatus = "free" | "tentative" | "busy" | "unknown" | "error";
+// `email` is the join key -- votes come back keyed by address (TallyEntry
+// below) and EventParticipant is uniquely keyed on [eventId, email]. It is
+// matched on, never rendered: this table is visible to every attendee, so the
+// label goes through lib/displayName. Issue #6.
 type ParticipantAvailability = { email: string; name: string | null; status: ParticipantStatus };
 type Slot = {
   start: string;
@@ -627,7 +632,7 @@ function SlotRow({
                   <li key={p.email} className="flex items-center gap-2 text-sm">
                     <StatusIcon status={p.status} />
                     <span className={p.status === "unknown" ? "text-ink/40" : "text-ink/80"}>
-                      {p.name ? `${p.name} (${p.email})` : p.email}
+                      {displayName(p)}
                     </span>
                     {theirVote && (
                       <span

@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import SuggestedFriendChip from "./SuggestedFriendChip";
 
-type SuggestedUser = { id: string; name: string | null; email: string | null; image: string | null };
+// Mirrors SuggestedFriendChip's type: one resolved label, no raw name and no
+// email. See the note there -- the shape is issue #6's boundary, not a
+// convenience.
+type SuggestedUser = { id: string; displayName: string; image: string | null };
 
 // A chip that has been acted on fades, then its row collapses (see the
 // .suggestion-row rules in globals.css). The unmount is driven by the row's

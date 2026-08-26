@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
+import { displayName } from "../../../../lib/displayName";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -54,13 +55,34 @@ export async function GET() {
     .slice(0, 5)
     .map(([id]) => id);
 
+  // The label is resolved HERE rather than in the browser, and that is the
+  // whole of issue #6's fix for this endpoint.
+  //
+  // Everyone listed is a friend-of-a-friend the caller has never met and has
+  // no address for -- that is the entire premise of a suggestion. Sending
+  // `email` and letting the chip decide what to render would leak it whether
+  // or not the markup used it: it would be sitting in the JSON. So the server
+  // resolves the one string the viewer is allowed to see and sends only that.
+  //
+  // Note this is NOT the same as never sending an address. An account with no
+  // display name has been told, in components/DisplayNameBanner, that its
+  // email is what people see -- so for that account displayName returns the
+  // address and this endpoint passes it on, because withholding it would
+  // reverse a choice the person made and leave them showing up to the whole
+  // app as "Someone". What can't happen any more is the case that made this a
+  // bug: an account WITH a name having its address sent out beside it.
+  //
+  // Requesting a suggestion therefore POSTs { userId } rather than { email }
+  // -- see the schema in ../route.ts.
   const users = await prisma.user.findMany({
     where: { id: { in: ranked } },
     select: { id: true, name: true, email: true, image: true },
   });
   // findMany's `in` filter doesn't preserve the order of the ids you gave
   // it, so re-order the results to match the actual ranking.
-  const byId = new Map(users.map((u) => [u.id, u]));
+  const byId = new Map(
+    users.map((u) => [u.id, { id: u.id, displayName: displayName(u), image: u.image }])
+  );
   const suggestions = ranked.map((id) => byId.get(id)).filter(Boolean);
 
   return NextResponse.json({ suggestions });

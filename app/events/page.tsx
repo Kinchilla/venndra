@@ -4,12 +4,14 @@ import Link from "next/link";
 import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import { buttonClass } from "../../lib/buttonStyles";
+import { displayName } from "../../lib/displayName";
 import BackButton from "../../components/BackButton";
 import EventChip from "../../components/EventChip";
 import ClearSectionButton from "../../components/ClearSectionButton";
 import Paginated from "../../components/Paginated";
 import CountBadge from "../../components/CountBadge";
 import ConnectCalendarBanner from "../../components/ConnectCalendarBanner";
+import DisplayNameBanner from "../../components/DisplayNameBanner";
 
 export default async function EventsPage() {
   const session = await getServerSession(authOptions);
@@ -55,6 +57,8 @@ export default async function EventsPage() {
       </div>
 
       <ConnectCalendarBanner />
+
+      <DisplayNameBanner />
 
       <EventSection title="Confirmed" events={confirmed} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} />
       <EventSection title="Still deciding" events={inProgress} userId={userId} isPast={isPast} writeProviderBySourceId={writeProviderBySourceId} showCount />
@@ -107,7 +111,7 @@ function EventSection({
                 event={{
                   id: e.id,
                   title: e.title,
-                  organizerName: e.creatorId === userId ? "You" : e.creator.name ?? e.creator.email ?? "Someone",
+                  organizerName: e.creatorId === userId ? "You" : displayName(e.creator),
                   isOrganizer: e.creatorId === userId,
                   creatorId: e.creatorId,
                   isPast: isPast(e),

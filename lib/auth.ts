@@ -7,6 +7,7 @@ import { populateCalendarSources } from "./calendarSources";
 import { magicLinkProvider } from "./magicLink";
 import { normalizeEmail } from "./emailIdentity";
 import { prismaAdapterWithMagicLinkFixes } from "./authAdapter";
+import { hasDisplayName } from "./displayName";
 import { clearAccountAuthFailed } from "./calendar/authHealth";
 
 // Scopes we need in addition to basic sign-in:
@@ -196,6 +197,37 @@ export const authOptions: NextAuthOptions = {
     // availability source so the user doesn't have to do a separate step.
     async linkAccount({ user, account, profile }) {
       if (account.provider !== "google" && account.provider !== "azure-ad") return;
+
+      // Take the provider's name and picture if this account hasn't got them.
+      //
+      // NextAuth maps `profile` onto the user row in createUser and NOWHERE
+      // else, so those fields get populated only for accounts whose very first
+      // sign-in was OAuth. An account created by magic link starts with no
+      // name -- there is no identity provider in that flow to supply one --
+      // and connecting Google to it afterwards never used to fix that, so the
+      // account stayed nameless forever while Google handed us the name on
+      // every single sign-in.
+      //
+      // Here rather than in the signIn event below, and the difference
+      // matters. signIn fires on EVERY sign-in, so filling a blank name there
+      // would silently undo someone deliberately clearing theirs -- and
+      // clearing it is a supported choice (see app/api/me and issue #18:
+      // no display name means friends see your email, which some people
+      // prefer). This event fires only when an OAuth account is actually
+      // linked, which is a deliberate act by the user and a reasonable moment
+      // to adopt that account's name.
+      //
+      // Guarded on each field being empty, so it only ever fills a gap: a name
+      // typed into Settings outranks the provider's, or choosing your own
+      // display name would be worthless the next time you connected a
+      // calendar.
+      const fill = {
+        ...(!hasDisplayName(user.name) && hasDisplayName(profile?.name) && { name: profile!.name!.trim() }),
+        ...(!user.image && profile?.image && { image: profile.image }),
+      };
+      if (Object.keys(fill).length > 0) {
+        await prisma.user.update({ where: { id: user.id }, data: fill });
+      }
 
       const provider = account.provider === "google" ? "GOOGLE" : "MICROSOFT";
       const dbAccount = await prisma.account.findUnique({

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import Avatar from "./Avatar";
+import { displayName } from "../lib/displayName";
 import Logo from "./Logo";
 import CountBadge from "./CountBadge";
 import { buttonClass } from "../lib/buttonStyles";
@@ -98,7 +99,16 @@ export default async function SiteHeader() {
               href="/settings"
               className={buttonClass({ variant: "neutral", size: "nav", className: "flex items-center gap-2 sm:ml-2" })}
             >
-              <Avatar image={session.user.image} name={session.user.name} email={session.user.email} size={24} />
+              {/* Your own header, so the address in the fallback is your own
+                  -- displayName's email step is showing you something you
+                  already know, not disclosing anything. colorKey is the id so
+                  the circle matches the one your friends see. */}
+              <Avatar
+                image={session.user.image}
+                name={displayName(session.user)}
+                colorKey={(session.user as any).id}
+                size={24}
+              />
               {session.user.name?.split(" ")[0] ?? "Profile"}
             </Link>
           ) : (

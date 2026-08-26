@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { displayName } from "./displayName";
 import { pausedInviteeMessage } from "./pause";
 
 /**
@@ -67,5 +68,8 @@ export async function validateNoPausedInvitees(userEmail: string, emails: string
   });
   if (paused.length === 0) return null;
 
-  return pausedInviteeMessage(paused.map((u) => u.name ?? u.email ?? "Someone"));
+  // Through displayName like every other people-list: this message names
+  // people back to the organizer, and naming them by address would reintroduce
+  // issue #6's leak in a sentence rather than in a chip.
+  return pausedInviteeMessage(paused.map(displayName));
 }
