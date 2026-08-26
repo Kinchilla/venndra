@@ -48,7 +48,6 @@ export default function ProfileForm({
   const timezones = useClientValue<string[]>(
     () => {
       try {
-        // @ts-ignore -- supportedValuesOf isn't in older TS lib definitions yet
         const all = Intl.supportedValuesOf("timeZone") as string[];
         return all.includes(initialTimezone) ? all : [initialTimezone, ...all];
       } catch {

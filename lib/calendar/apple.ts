@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { DAVClient } from "tsdav";
-// @ts-ignore -- ical.js ships without first-class types
+// @ts-expect-error -- ical.js ships without first-class types
 import ICAL from "ical.js";
 import { decrypt } from "../crypto";
 import { prisma } from "../prisma";

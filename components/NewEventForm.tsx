@@ -59,7 +59,6 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [groups, setGroups] = useState<SavedGroup[]>([]);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -337,7 +336,6 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   }, [session]);
 
   function applyGroup(groupId: string) {
-    setSelectedGroupId(groupId);
     const group = groups.find((g) => g.id === groupId);
     if (group) {
       setEmails(group.emails);
