@@ -30,15 +30,39 @@ export default function NewFriendForm() {
       return;
     }
     setChecking(true);
+
+    // Cancels the actual in-flight request, not just a pending timeout.
+    // clearTimeout alone only stops a check that hasn't fired YET -- once the
+    // 400ms elapses and fetch() is dispatched, a further keystroke's cleanup
+    // could previously do nothing about it. That let two checks be in flight
+    // at once (one for a typo, one for the correction typed right after it),
+    // and whichever response landed last won regardless of which address was
+    // still on screen: a corrected, valid address could be left showing the
+    // stale "no profile found" hint from the typo it replaced, if the server
+    // happened to answer the typo's request second. Aborting here means the
+    // superseded request can never call setCheckResult at all.
+    const controller = new AbortController();
     const timeout = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/friends/check?email=${encodeURIComponent(email.trim())}`);
-        setCheckResult(await res.json());
+        const res = await fetch(`/api/friends/check?email=${encodeURIComponent(email.trim())}`, {
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        if (!controller.signal.aborted) setCheckResult(data);
+      } catch {
+        // Includes the abort itself: cancelling here throws, and that's the
+        // expected way this branch is reached, not a failure to report. A
+        // genuine network error also lands here and is left silent for the
+        // same reason -- this hint is advisory, and POST /api/friends
+        // re-validates for real regardless of what it says.
       } finally {
-        setChecking(false);
+        if (!controller.signal.aborted) setChecking(false);
       }
     }, 400);
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [email]);
 
   async function handleSubmit(e: React.FormEvent) {
