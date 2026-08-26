@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
 import Avatar from "./Avatar";
 import SessionEndedNotice from "./SessionEndedNotice";
@@ -8,7 +9,13 @@ import SessionEndedNotice from "./SessionEndedNotice";
 type SuggestedUser = { id: string; name: string | null; email: string | null; image: string | null };
 
 export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedUser; onGone: (userId: string) => void }) {
-  const [loading, setLoading] = useState<"send" | "dismiss" | null>(null);
+  // `hold` rather than `commit` on success: this chip doesn't wait on a server
+  // re-render, it hands off to the parent, which fades and collapses the row
+  // over the best part of a second before unmounting it. Clearing the pending
+  // flag at any point in there would hand back live buttons on a suggestion
+  // that's visibly on its way out -- the longest version of exactly the gap
+  // hooks/usePendingAction exists to close.
+  const { pending, busy, begin, release, hold } = usePendingAction<"send" | "dismiss">();
   const [error, setError] = useState<string | null>(null);
   // Holds the phrase for the notice rather than a bare flag, since the two
   // buttons end the same sentence differently. Null means no 401.
@@ -16,7 +23,7 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
 
   async function handleSend() {
     if (!user.email) return;
-    setLoading("send");
+    begin("send");
     setError(null);
     setSessionEnded(null);
     const res = await fetch("/api/friends", {
@@ -24,11 +31,12 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: user.email }),
     });
-    setLoading(null);
     if (res.ok) {
+      hold();
       onGone(user.id);
       return;
     }
+    release();
     // This chip only renders on a page that already guards on a session, so a
     // 401 means it ended with the tab open. Passing body.error through would
     // print the API's bare "Unauthorized" -- see SessionEndedNotice.
@@ -41,7 +49,7 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
   }
 
   async function handleDismiss() {
-    setLoading("dismiss");
+    begin("dismiss");
     setError(null);
     setSessionEnded(null);
     const res = await fetch("/api/friends/suggestions/dismiss", {
@@ -49,11 +57,12 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: user.id }),
     });
-    setLoading(null);
     if (res.ok) {
+      hold();
       onGone(user.id);
       return;
     }
+    release();
     // Never showed the raw string, but "Couldn't dismiss this suggestion" is a
     // dead end when the real problem is a session that ended and can be renewed.
     if (res.status === 401) {
@@ -78,17 +87,17 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
       <div className="flex shrink-0 items-center gap-2">
         <button
           onClick={handleSend}
-          disabled={loading !== null}
+          disabled={busy}
           className={buttonClass({ variant: "primary" })}
         >
-          {loading === "send" ? "Sending…" : "Send request"}
+          {pending === "send" ? "Sending…" : "Send request"}
         </button>
         <button
           onClick={handleDismiss}
-          disabled={loading !== null}
+          disabled={busy}
           className={buttonClass({ variant: "danger" })}
         >
-          {loading === "dismiss" ? "Dismissing…" : "Dismiss"}
+          {pending === "dismiss" ? "Dismissing…" : "Dismiss"}
         </button>
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
+import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
 
 type Participant = {
@@ -74,7 +75,14 @@ function formatFilters(filters: Record<string, [string, string][]>): string {
 export default function EventChip({ event }: { event: EventChipData }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
-  const [actionLoading, setActionLoading] = useState<"cancel" | "reopen" | "leave" | "loadCandidates" | "reassign" | null>(null);
+  // Cancel, leave, reschedule, delete and transfer all end with this chip
+  // being rebuilt or removed by the refreshed list, so the buttons stay
+  // inactive until that lands rather than until the fetch resolves -- see
+  // hooks/usePendingAction. Loading the transfer candidates is the one action
+  // here that isn't a mutation, and it `release()`s instead: its result lands
+  // in this component's own state, in the same render that re-enables things.
+  const { pending, busy, begin, release, commit } =
+    usePendingAction<"cancel" | "reopen" | "leave" | "loadCandidates" | "reassign">();
   const [actionError, setActionError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
@@ -114,13 +122,13 @@ export default function EventChip({ event }: { event: EventChipData }) {
       cancelConfirmText = `Cancel this event? This will delete it for everyone -- everyone gets a cancellation notice on their calendar.${transferSuggestion}`;
     }
     if (!confirm(cancelConfirmText)) return;
-    setActionLoading("cancel");
+    begin("cancel");
     setActionError(null);
     const res = await fetch(`/api/events/${event.id}/cancel`, { method: "POST" });
-    setActionLoading(null);
     if (res.ok) {
-      router.refresh();
+      commit(() => router.refresh());
     } else {
+      release();
       const body = await res.json().catch(() => null);
       setActionError(typeof body?.error === "string" ? body.error : "Couldn't cancel this event.");
     }
@@ -138,13 +146,13 @@ export default function EventChip({ event }: { event: EventChipData }) {
       ? "Leave this event? You'll be removed from the attendee list here in Venndra. If you added this event to your personal calendar, you may wish to delete that as well, since iCloud doesn't support automatic invite updates."
       : "Leave this event? You'll be removed from the attendee list, and this will disappear from your Venndra events and personal calendar.";
   if (!confirm(leaveConfirmText)) return;
-  setActionLoading("leave");
+  begin("leave");
   setActionError(null);
   const res = await fetch(`/api/events/${event.id}/leave`, { method: "POST" });
-  setActionLoading(null);
   if (res.ok) {
-    router.refresh();
+    commit(() => router.refresh());
   } else {
+    release();
     const body = await res.json().catch(() => null);
     setActionError(typeof body?.error === "string" ? body.error : "Couldn't leave this event.");
   }
@@ -154,9 +162,9 @@ export default function EventChip({ event }: { event: EventChipData }) {
   // alongside the refreshed list (a load failure vs. a stale-row refresh
   // after a failed transfer shouldn't stomp on each other's messaging).
   async function fetchCandidates(): Promise<boolean> {
-    setActionLoading("loadCandidates");
+    begin("loadCandidates");
     const res = await fetch(`/api/events/${event.id}/reassign-candidates`);
-    setActionLoading(null);
+    release();
     if (res.ok) {
       const body = await res.json();
       setCandidates(body.candidates ?? []);
@@ -180,7 +188,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
 
   async function handleReassign(candidate: Candidate) {
     if (!candidate.userId) return;
-    setActionLoading("reassign");
+    begin("reassign");
     setReassigningUserId(candidate.userId);
     setPickerError(null);
     const res = await fetch(`/api/events/${event.id}/reassign`, {
@@ -189,10 +197,13 @@ export default function EventChip({ event }: { event: EventChipData }) {
       body: JSON.stringify({ newOrganizerUserId: candidate.userId }),
     });
     if (res.ok) {
-      setActionLoading(null);
-      router.refresh();
+      // reassigningUserId is deliberately left set, as it always was: the
+      // refresh rebuilds this chip from scratch, so the row keeps saying
+      // "Transferring…" right up to the moment it's replaced.
+      commit(() => router.refresh());
       return;
     }
+    release();
     const body = await res.json().catch(() => null);
     setPickerError(typeof body?.error === "string" ? body.error : "Couldn't transfer the organizer role.");
     // Eligibility may have changed since the list was fetched (e.g. they
@@ -211,13 +222,13 @@ export default function EventChip({ event }: { event: EventChipData }) {
   }
 
   async function handleReschedule() {
-    setActionLoading("reopen");
+    begin("reopen");
     setActionError(null);
     const res = await fetch(`/api/events/${event.id}/reopen`, { method: "POST" });
-    setActionLoading(null);
     if (res.ok) {
-      router.refresh();
+      commit(() => router.refresh());
     } else {
+      release();
       const body = await res.json().catch(() => null);
       setActionError(typeof body?.error === "string" ? body.error : "Couldn't reschedule this event.");
     }
@@ -225,13 +236,13 @@ export default function EventChip({ event }: { event: EventChipData }) {
 
   async function handleDelete() {
     if (!confirm("This will permanently delete this event from your Venndra profile, which cannot be undone. It will not affect your linked calendars. Are you sure you want to delete?")) return;
-    setActionLoading("cancel"); // reusing the same loading state -- only one action button shows at a time in this case anyway
+    begin("cancel"); // reusing the same key -- only one action button shows at a time in this case anyway
     setActionError(null);
     const res = await fetch(`/api/events/${event.id}`, { method: "DELETE" });
-    setActionLoading(null);
     if (res.ok) {
-      router.refresh();
+      commit(() => router.refresh());
     } else {
+      release();
       const body = await res.json().catch(() => null);
       setActionError(typeof body?.error === "string" ? body.error : "Couldn't delete this event.");
     }
@@ -302,10 +313,10 @@ export default function EventChip({ event }: { event: EventChipData }) {
             {event.isOrganizer && (event.status === "CANCELLED" || (event.status === "CONFIRMED" && event.isPast)) && (
               <button
                 onClick={handleDelete}
-                disabled={actionLoading !== null}
+                disabled={busy}
                 className={buttonClass({ variant: "danger", className: "mt-3" })}
               >
-                {actionLoading === "cancel" ? "Deleting…" : "Delete"}
+                {pending === "cancel" ? "Deleting…" : "Delete"}
               </button>
             )}
 
@@ -317,7 +328,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
                 {event.isOrganizer && (
                   <button
                     onClick={handleEdit}
-                    disabled={actionLoading !== null}
+                    disabled={busy}
                     className={buttonClass({ variant: "edit" })}
                   >
                     Edit this search
@@ -326,28 +337,28 @@ export default function EventChip({ event }: { event: EventChipData }) {
                 {event.isOrganizer && hasOtherParticipants && (
                   <button
                     onClick={handleOpenPicker}
-                    disabled={actionLoading !== null}
+                    disabled={busy}
                     className={buttonClass({ variant: "edit" })}
                   >
-                    {actionLoading === "loadCandidates" ? "Loading…" : "Transfer organizer role"}
+                    {pending === "loadCandidates" ? "Loading…" : "Transfer organizer role"}
                   </button>
                 )}
                 {event.isOrganizer && (
                   <button
                     onClick={handleCancel}
-                    disabled={actionLoading !== null}
+                    disabled={busy}
                     className={buttonClass({ variant: "danger" })}
                   >
-                    {actionLoading === "cancel" ? "Cancelling…" : "Cancel this search"}
+                    {pending === "cancel" ? "Cancelling…" : "Cancel this search"}
                   </button>
                 )}
                 {!event.isOrganizer && (
                   <button
                     onClick={handleLeave}
-                    disabled={actionLoading !== null}
+                    disabled={busy}
                     className={buttonClass({ variant: "danger" })}
                   >
-                    {actionLoading === "leave" ? "Leaving…" : "Leave this event"}
+                    {pending === "leave" ? "Leaving…" : "Leave this event"}
                   </button>
                 )}
               </div>
@@ -357,7 +368,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
               <ReassignPicker
                 candidates={candidates}
                 confirmed={false}
-                actionLoading={actionLoading}
+                busy={busy}
                 reassigningUserId={reassigningUserId}
                 pickerError={pickerError}
                 onPick={handleReassign}
@@ -369,26 +380,26 @@ export default function EventChip({ event }: { event: EventChipData }) {
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   onClick={handleReschedule}
-                  disabled={actionLoading !== null}
+                  disabled={busy}
                   className={buttonClass({ variant: "edit" })}
                 >
-                  {actionLoading === "reopen" ? "Reopening…" : "Reschedule"}
+                  {pending === "reopen" ? "Reopening…" : "Reschedule"}
                 </button>
                 {hasOtherParticipants && (
                   <button
                     onClick={handleOpenPicker}
-                    disabled={actionLoading !== null}
+                    disabled={busy}
                     className={buttonClass({ variant: "edit" })}
                   >
-                    {actionLoading === "loadCandidates" ? "Loading…" : "Transfer organizer role"}
+                    {pending === "loadCandidates" ? "Loading…" : "Transfer organizer role"}
                   </button>
                 )}
                 <button
                   onClick={handleCancel}
-                  disabled={actionLoading !== null}
+                  disabled={busy}
                   className={buttonClass({ variant: "danger" })}
                 >
-                  {actionLoading === "cancel" ? "Cancelling…" : "Cancel event"}
+                  {pending === "cancel" ? "Cancelling…" : "Cancel event"}
                 </button>
               </div>
             )}
@@ -396,7 +407,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
               <ReassignPicker
                 candidates={candidates}
                 confirmed={true}
-                actionLoading={actionLoading}
+                busy={busy}
                 reassigningUserId={reassigningUserId}
                 pickerError={pickerError}
                 onPick={handleReassign}
@@ -407,10 +418,10 @@ export default function EventChip({ event }: { event: EventChipData }) {
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   onClick={handleLeave}
-                  disabled={actionLoading !== null}
+                  disabled={busy}
                   className={buttonClass({ variant: "danger" })}
                 >
-                  {actionLoading === "leave" ? "Leaving…" : "Leave this event"}
+                  {pending === "leave" ? "Leaving…" : "Leave this event"}
                 </button>
               </div>
             )}
@@ -430,7 +441,7 @@ const INELIGIBLE_REASON_TEXT: Record<NonNullable<Candidate["reason"]>, string> =
 function ReassignPicker({
   candidates,
   confirmed,
-  actionLoading,
+  busy,
   reassigningUserId,
   pickerError,
   onPick,
@@ -438,7 +449,7 @@ function ReassignPicker({
 }: {
   candidates: Candidate[] | null;
   confirmed: boolean;
-  actionLoading: string | null;
+  busy: boolean;
   reassigningUserId: string | null;
   pickerError: string | null;
   onPick: (candidate: Candidate) => void;
@@ -474,7 +485,7 @@ function ReassignPicker({
                 {c.eligible && (
                   <button
                     onClick={() => onPick(c)}
-                    disabled={actionLoading !== null}
+                    disabled={busy}
                     // Only the row actually being handed off visually greys
                     // out -- the rest stay functionally disabled (the
                     // `disabled` attribute still blocks the click) but keep
@@ -495,7 +506,7 @@ function ReassignPicker({
       {pickerError && <p className="mt-2 text-sm text-red-600">{pickerError}</p>}
       <button
         onClick={onClose}
-        disabled={actionLoading !== null}
+        disabled={busy}
         className="mt-3 text-xs font-medium text-ink/50 hover:text-ink/70 disabled:opacity-50"
       >
         Never mind

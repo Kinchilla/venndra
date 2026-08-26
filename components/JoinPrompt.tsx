@@ -1,20 +1,22 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { usePendingAction } from "../hooks/usePendingAction";
 import ConnectAppleForm from "./ConnectAppleForm";
 import { buttonClass } from "../lib/buttonStyles";
 
 export default function JoinPrompt({ eventId }: { eventId: string }) {
   const router = useRouter();
-  const [checking, setChecking] = useState(false);
+  // A successful join replaces this whole prompt with the event's results, so
+  // the button stays inactive until that refreshed tree commits rather than
+  // going live again while the old prompt is still on screen.
+  const { pending, busy, begin, commit } = usePendingAction<"check">();
 
   async function refreshStatus() {
-    setChecking(true);
+    begin("check");
     await fetch(`/api/events/${eventId}/join`, { method: "POST" });
-    setChecking(false);
-    router.refresh();
+    commit(() => router.refresh());
   }
 
   return (
@@ -40,8 +42,8 @@ export default function JoinPrompt({ eventId }: { eventId: string }) {
       <div className="mt-3">
         <ConnectAppleForm />
       </div>
-      <button onClick={refreshStatus} disabled={checking} className="mt-4 text-xs text-teal hover:underline">
-        {checking ? "Checking…" : "Already connected? Refresh"}
+      <button onClick={refreshStatus} disabled={busy} className="mt-4 text-xs text-teal hover:underline">
+        {pending === "check" ? "Checking…" : "Already connected? Refresh"}
       </button>
     </div>
   );

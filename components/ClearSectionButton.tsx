@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePendingAction } from "../hooks/usePendingAction";
 
 export default function ClearSectionButton({ eventIds }: { eventIds: string[] }) {
   const router = useRouter();
-  const [clearing, setClearing] = useState(false);
+  // Stays inactive until the refreshed section has committed -- the whole
+  // section (this button included) goes with it. See hooks/usePendingAction.
+  const { pending, busy, begin, commit } = usePendingAction<"clear">();
 
   if (eventIds.length === 0) return null;
 
@@ -16,15 +18,14 @@ export default function ClearSectionButton({ eventIds }: { eventIds: string[] })
       )
     )
       return;
-    setClearing(true);
+    begin("clear");
     await Promise.all(eventIds.map((id) => fetch(`/api/events/${id}`, { method: "DELETE" })));
-    setClearing(false);
-    router.refresh();
+    commit(() => router.refresh());
   }
 
   return (
-    <button onClick={handleClear} disabled={clearing} className="text-sm text-ink/40 hover:text-red-600 disabled:opacity-50">
-      {clearing ? "Clearing…" : "Clear"}
+    <button onClick={handleClear} disabled={busy} className="text-sm text-ink/40 hover:text-red-600 disabled:opacity-50">
+      {pending === "clear" ? "Clearing…" : "Clear"}
     </button>
   );
 }

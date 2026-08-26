@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { usePendingAction } from "../hooks/usePendingAction";
 import Button from "./Button";
 
 /**
@@ -38,12 +39,20 @@ export default function AccountManagement({
 }) {
   const router = useRouter();
   const [paused, setPaused] = useState(initialPaused);
-  const [pending, setPending] = useState<"pause" | "delete" | null>(null);
+  const { pending, busy, begin, release, commit, hold } = usePendingAction<"pause" | "delete">();
+  // Which way the in-flight toggle is going. The button's working label used
+  // to be derived from `paused`, which is fine only while that flips in the
+  // same instant the label stops being shown -- it no longer does, since the
+  // flip now waits for the refresh, so deriving from it flashed the opposite
+  // word ("Unpausing…") for a frame on the way out. The label describes the
+  // action, so it reads from the action.
+  const [pausingTo, setPausingTo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function togglePause() {
     const next = !paused;
-    setPending("pause");
+    setPausingTo(next);
+    begin("pause");
     setError(null);
 
     const res = await fetch("/api/me/pause", {
@@ -51,18 +60,28 @@ export default function AccountManagement({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paused: next }),
     });
-    setPending(null);
 
     if (!res.ok) {
+      release();
       setError(next ? "Couldn't pause your account. Try again." : "Couldn't unpause your account. Try again.");
       return;
     }
 
-    setPaused(next);
     // Nothing else on this page reads the pause state today, but /friends and
     // the event form do -- refreshing drops the Router Cache entries that
-    // would otherwise show a stale answer on the way back.
-    router.refresh();
+    // would otherwise show a stale answer on the way back. This is the one
+    // action on the site that legitimately re-enables its own button, so it
+    // waits for that refresh to commit before doing so rather than offering a
+    // second pause while the first is still settling.
+    //
+    // setPaused goes INSIDE the transition, with the refresh, so the row's
+    // heading and its description change at the same instant the button comes
+    // back. Flipping it beforehand would rewrite the row to its new state
+    // while the old one was still being saved.
+    commit(() => {
+      setPaused(next);
+      router.refresh();
+    });
   }
 
   /**
@@ -89,20 +108,21 @@ export default function AccountManagement({
   }
 
   async function handleDelete() {
-    setPending("delete");
+    begin("delete");
     setError(null);
 
     const res = await fetch("/api/me", { method: "DELETE" });
     if (!res.ok) {
-      setPending(null);
+      release();
       setError("Couldn't delete your account. Try again, or get in touch if this keeps happening.");
       return;
     }
 
-    // Deliberately no setPending(null) on success: the account is gone and
-    // the sign-out redirect is already on its way, so re-enabling the button
-    // would only offer a second DELETE against a session that no longer has
-    // a user behind it.
+    // `hold` rather than `commit`: the account is gone and the sign-out
+    // redirect is already on its way, so nothing re-enables this button --
+    // re-enabling would only offer a second DELETE against a session that no
+    // longer has a user behind it.
+    hold();
     signOut({ callbackUrl: "/" });
   }
 
@@ -147,11 +167,11 @@ export default function AccountManagement({
                 : "Nobody will be able to add you to new events. Events you're already on carry on as normal; if you want out of one of those, leave it yourself."}
             </p>
           </div>
-          <Button variant="edit" onClick={togglePause} disabled={pending !== null} className="shrink-0">
+          <Button variant="edit" onClick={togglePause} disabled={busy} className="shrink-0">
             {pending === "pause"
-              ? paused
-                ? "Unpausing…"
-                : "Pausing…"
+              ? pausingTo
+                ? "Pausing…"
+                : "Unpausing…"
               : paused
                 ? "Unpause my account"
                 : "Pause my account"}
@@ -170,7 +190,7 @@ export default function AccountManagement({
             variant="danger"
             confirm={deleteConfirmText}
             onClick={handleDelete}
-            disabled={pending !== null}
+            disabled={busy}
             className="shrink-0"
           >
             {pending === "delete" ? "Deleting…" : "Delete my account"}

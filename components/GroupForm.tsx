@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import FriendPicker from "./FriendPicker";
 import FiltersBuilder, { WeeklyHours } from "./FiltersBuilder";
 import Toggle from "./Toggle";
+import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
 import { takeGroupPrefill } from "../lib/groupPrefill";
 import { markEventDraftForRestore } from "../lib/eventDraft";
@@ -42,8 +43,12 @@ export default function GroupForm({
   // Editing an existing group starts in whatever state that group is already
   // in; a brand-new one starts off, which is what makes "optional" honest.
   const [customWindow, setCustomWindow] = useState(hasSearchWindow(initialFilters));
-  const [submitting, setSubmitting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  // Saving and deleting share one pending state, so neither button comes back
+  // to life while the other's navigation or refresh is still on its way -- see
+  // hooks/usePendingAction. Every success here ends in a router call, which is
+  // exactly the case where "the fetch resolved" and "the change is on screen"
+  // are different moments.
+  const { pending, busy, begin, release, commit } = usePendingAction<"save" | "delete">();
   const [pickerHasPendingText, setPickerHasPendingText] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -109,7 +114,7 @@ export default function GroupForm({
       setError("Add at least one friend's email.");
       return;
     }
-    setSubmitting(true);
+    begin("save");
     setError(null);
 
     const res = await fetch(isEditing ? `/api/groups/${groupId}` : "/api/groups", {
@@ -121,15 +126,17 @@ export default function GroupForm({
       body: JSON.stringify({ name, emails, defaultFilters: customWindow ? filters : null }),
     });
 
-    setSubmitting(false);
     if (!res.ok) {
+      release();
       setError("Couldn't save that group.");
       return;
     }
 
     if (isEditing) {
-      router.push("/groups");
-      router.refresh();
+      commit(() => {
+        router.push("/groups");
+        router.refresh();
+      });
       return;
     }
 
@@ -144,8 +151,10 @@ export default function GroupForm({
       // without it they'd arrive at a blank form having just been pulled away
       // from a half-filled one.
       markEventDraftForRestore();
-      router.push("/events/new");
-      router.refresh();
+      commit(() => {
+        router.push("/events/new");
+        router.refresh();
+      });
       return;
     }
 
@@ -159,7 +168,9 @@ export default function GroupForm({
     setCustomWindow(false);
     setFiltersVersion((v) => v + 1);
     setSaved(true);
-    router.refresh();
+    // The only path that stays put, so it's the only one where the button
+    // comes back -- once the refresh has landed, ready for the next group.
+    commit(() => router.refresh());
   }
 
   useEffect(() => {
@@ -171,12 +182,15 @@ export default function GroupForm({
   async function handleDelete() {
     if (!groupId) return;
     if (!confirm(`Delete "${name}"? This can't be undone.`)) return;
-    setDeleting(true);
+    begin("delete");
     const res = await fetch(`/api/groups/${groupId}`, { method: "DELETE" });
-    setDeleting(false);
     if (res.ok) {
-      router.push("/groups");
-      router.refresh();
+      commit(() => {
+        router.push("/groups");
+        router.refresh();
+      });
+    } else {
+      release();
     }
   }
 
@@ -229,17 +243,17 @@ export default function GroupForm({
       {saved && <p className="text-sm text-teal">Saved!</p>}
 
       <div className="flex items-center gap-3">
-        <button type="submit" disabled={submitting || pickerHasPendingText} className={buttonClass({ variant: "primary", size: "lg", className: "w-fit" })}>
-          {submitting ? "Saving…" : isEditing ? "Save changes" : "Save group"}
+        <button type="submit" disabled={busy || pickerHasPendingText} className={buttonClass({ variant: "primary", size: "lg", className: "w-fit" })}>
+          {pending === "save" ? "Saving…" : isEditing ? "Save changes" : "Save group"}
         </button>
         {isEditing && (
           <button
             type="button"
             onClick={handleDelete}
-            disabled={deleting}
+            disabled={busy}
             className="text-sm text-ink/40 hover:text-red-600 disabled:opacity-50"
           >
-            {deleting ? "Deleting…" : "Delete group"}
+            {pending === "delete" ? "Deleting…" : "Delete group"}
           </button>
         )}
       </div>

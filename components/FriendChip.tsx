@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
 import { PAUSED_TAG } from "../lib/pause";
 import Avatar from "./Avatar";
 
 type FriendUser = { id: string; name: string | null; email: string | null; image: string | null; paused: boolean };
+type Action = "remove" | "cancel" | "decline" | "accept";
 
 export default function FriendChip({
   friendshipId,
@@ -18,18 +20,26 @@ export default function FriendChip({
   kind: "friend" | "sent" | "received";
 }) {
   const router = useRouter();
-  const [loading, setLoading] = useState<string | null>(null);
+  // Every action on this chip ends with the chip itself leaving the list, so
+  // the buttons stay inactive until the refreshed tree has committed rather
+  // than until the fetch resolves -- see hooks/usePendingAction.
+  const { pending, busy, begin, release, commit } = usePendingAction<Action>();
   const [error, setError] = useState<string | null>(null);
 
-  async function act(action: "remove" | "cancel" | "decline", url: string, method: string) {
-    setLoading(action);
+  async function act(
+    action: Action,
+    url: string,
+    method: string,
+    failureMessage = "That didn't work — try again."
+  ) {
+    begin(action);
     setError(null);
     const res = await fetch(url, { method });
-    setLoading(null);
     if (res.ok) {
-      router.refresh();
+      commit(() => router.refresh());
     } else {
-      setError("That didn't work — try again.");
+      release();
+      setError(failureMessage);
     }
   }
 
@@ -39,12 +49,7 @@ export default function FriendChip({
   }
 
   async function handleAccept() {
-    setLoading("accept");
-    setError(null);
-    const res = await fetch(`/api/friends/${friendshipId}/accept`, { method: "POST" });
-    setLoading(null);
-    if (res.ok) router.refresh();
-    else setError("Couldn't accept this request.");
+    act("accept", `/api/friends/${friendshipId}/accept`, "POST", "Couldn't accept this request.");
   }
 
   const displayName = user.name ?? user.email ?? "Someone";
@@ -71,36 +76,36 @@ export default function FriendChip({
         {kind === "friend" && (
           <button
             onClick={handleRemove}
-            disabled={loading !== null}
+            disabled={busy}
             className={buttonClass({ variant: "danger" })}
           >
-            {loading === "remove" ? "Removing…" : "Remove friend"}
+            {pending === "remove" ? "Removing…" : "Remove friend"}
           </button>
         )}
         {kind === "sent" && (
           <button
             onClick={() => act("cancel", `/api/friends/${friendshipId}`, "DELETE")}
-            disabled={loading !== null}
+            disabled={busy}
             className={buttonClass({ variant: "danger" })}
           >
-            {loading === "cancel" ? "Cancelling…" : "Cancel request"}
+            {pending === "cancel" ? "Cancelling…" : "Cancel request"}
           </button>
         )}
         {kind === "received" && (
           <>
             <button
               onClick={handleAccept}
-              disabled={loading !== null}
+              disabled={busy}
               className={buttonClass({ variant: "primary" })}
             >
-              {loading === "accept" ? "Accepting…" : "Accept"}
+              {pending === "accept" ? "Accepting…" : "Accept"}
             </button>
             <button
               onClick={() => act("decline", `/api/friends/${friendshipId}`, "DELETE")}
-              disabled={loading !== null}
+              disabled={busy}
               className={buttonClass({ variant: "danger" })}
             >
-              {loading === "decline" ? "Declining…" : "Decline"}
+              {pending === "decline" ? "Declining…" : "Decline"}
             </button>
           </>
         )}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WeeklyHours } from "./FiltersBuilder";
+import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
 import Avatar from "./Avatar";
 
@@ -25,18 +26,20 @@ export default function GroupChip({
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  // A successful delete takes this chip with it, so the button stays inactive
+  // until the refreshed list commits -- see hooks/usePendingAction.
+  const { pending, busy, begin, release, commit } = usePendingAction<"delete">();
   const [error, setError] = useState<string | null>(null);
 
   async function handleDelete() {
     if (!confirm(`Delete "${name}"? This can't be undone.`)) return;
-    setDeleting(true);
+    begin("delete");
     setError(null);
     const res = await fetch(`/api/groups/${id}`, { method: "DELETE" });
-    setDeleting(false);
     if (res.ok) {
-      router.refresh();
+      commit(() => router.refresh());
     } else {
+      release();
       setError("That didn't work — try again.");
     }
   }
@@ -95,10 +98,10 @@ export default function GroupChip({
               </Link>
               <button
                 onClick={handleDelete}
-                disabled={deleting}
+                disabled={busy}
                 className={buttonClass({ variant: "danger" })}
               >
-                {deleting ? "Deleting…" : "Delete this group"}
+                {pending === "delete" ? "Deleting…" : "Delete this group"}
               </button>
             </div>
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
