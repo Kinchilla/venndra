@@ -595,13 +595,13 @@ function SlotRow({
         className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-sm transition-colors"
         style={{ backgroundColor: bg }}
       >
-        <span className="flex items-center gap-2">
+        <span className="min-w-0 flex items-center gap-2">
           <span className="font-medium">
             {showDate && <>{formatDate(slot.start)}, </>}
             {formatTime(slot.start, timeFormat)} – {formatTime(slot.end, timeFormat)}
           </span>
         </span>
-        <span className="flex items-center gap-2">
+        <span className="shrink-0 flex items-center gap-2">
           {votes && (
             <span
               className="text-xs font-medium text-amber"

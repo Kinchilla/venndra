@@ -267,8 +267,8 @@ export default function EventChip({ event }: { event: EventChipData }) {
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
-        <span className="font-medium">{event.title}</span>
-        <span className="text-sm text-teal">{headerText}</span>
+        <span className="min-w-0 flex-1 truncate font-medium">{event.title}</span>
+        <span className="shrink-0 text-sm text-teal">{headerText}</span>
       </button>
 
       <div className="accordion" data-open={expanded}>
@@ -462,7 +462,7 @@ function ReassignPicker({
       ) : candidates.length === 0 ? (
         <p className="text-sm text-ink/50">No one else is on this event.</p>
       ) : (
-        <div className="grid gap-2.5">
+        <div className="grid grid-cols-1 gap-2.5">
           {candidates.map((c) => {
             const label = c.name ?? c.email;
             return (

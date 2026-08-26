@@ -58,15 +58,15 @@ export default function GroupChip({
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
-        <span className="font-medium">{name}</span>
-        <span className="text-sm text-ink/50">{memberNames}</span>
+        <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+        <span className="min-w-0 max-w-[45%] shrink-0 truncate text-sm text-ink/50">{memberNames}</span>
       </button>
 
       <div className="accordion" data-open={expanded}>
         <div className="accordion-inner">
           <div className="border-t border-line/60 px-4 py-3 text-sm">
             <div className="sm:flex sm:items-start sm:gap-6">
-              <div className="grid gap-2 sm:flex-1">
+              <div className="grid grid-cols-1 gap-2 sm:flex-1">
                 {members.map((m) => (
                   <div key={m.email} className="flex items-center gap-2.5">
                     <Avatar image={m.image} name={m.name} email={m.email} size={24} />

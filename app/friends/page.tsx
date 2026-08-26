@@ -77,7 +77,7 @@ function FriendSection({
   return (
     <section className="mt-10">
       <h2 className="font-display text-lg font-semibold">{title}</h2>
-      <div className="mt-3 grid gap-2">
+      <div className="mt-3 grid grid-cols-1 gap-2">
         <Paginated>
           {entries.map((e) => (
             <FriendChip key={e.id} friendshipId={e.id} user={e.user} kind={kind} />

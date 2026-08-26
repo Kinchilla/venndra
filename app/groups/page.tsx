@@ -40,7 +40,7 @@ export default async function GroupsPage() {
 
       <ConnectCalendarBanner />
 
-      <div className="mt-8 grid gap-2">
+      <div className="mt-8 grid grid-cols-1 gap-2">
         <Paginated>
           {groups.map((g) => (
             <GroupChip

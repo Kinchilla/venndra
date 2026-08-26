@@ -99,7 +99,7 @@ function EventSection({
         </h2>
         {showClear && <ClearSectionButton eventIds={myEventIds} />}
       </div>
-      <div className="mt-3 grid gap-2">
+      <div className="mt-3 grid grid-cols-1 gap-2">
         <Paginated>
           {events.map((e) => (
             <div key={e.id} className={muted ? "opacity-60" : ""}>
