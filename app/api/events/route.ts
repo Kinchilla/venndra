@@ -4,7 +4,6 @@ import { z } from "zod";
 import { fromZonedTime } from "date-fns-tz";
 import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
-import { recordKnownContacts } from "../../../lib/knownContacts";
 import { validateAllFriends, validateNoPausedInvitees } from "../../../lib/friends";
 import { emailListField } from "../../../lib/emailIdentity";
 
@@ -148,8 +147,6 @@ export async function POST(req: NextRequest) {
     },
     include: { participants: true },
   });
-
-  await recordKnownContacts(userId, allEmails);
 
   return NextResponse.json({ event }, { status: 201 });
 }

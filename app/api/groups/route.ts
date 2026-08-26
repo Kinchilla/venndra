@@ -4,7 +4,6 @@ import { z } from "zod";
 import { authOptions } from "../../../lib/auth";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
-import { recordKnownContacts } from "../../../lib/knownContacts";
 import { validateAllFriends } from "../../../lib/friends";
 import { emailListField } from "../../../lib/emailIdentity";
 
@@ -50,8 +49,6 @@ export async function POST(req: NextRequest) {
   const group = await prisma.savedGroup.create({
     data: { ...rest, userId, defaultFilters: defaultFilters ?? Prisma.DbNull },
   });
-
-  await recordKnownContacts(userId, parsed.data.emails);
 
   return NextResponse.json({ group }, { status: 201 });
 }

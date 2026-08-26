@@ -4,7 +4,6 @@ import { z } from "zod";
 import { authOptions } from "../../../../lib/auth";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../../lib/prisma";
-import { recordKnownContacts } from "../../../../lib/knownContacts";
 import { validateAllFriends } from "../../../../lib/friends";
 import { emailListField } from "../../../../lib/emailIdentity";
 
@@ -65,8 +64,6 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       ...(defaultFilters === undefined ? {} : { defaultFilters: defaultFilters ?? Prisma.DbNull }),
     },
   });
-
-  await recordKnownContacts((session.user as any).id, parsed.data.emails);
 
   return NextResponse.json({ group });
 }

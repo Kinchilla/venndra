@@ -109,7 +109,6 @@ model User {
   eventsCreated      Event[]            @relation("EventCreator")
   savedGroups        SavedGroup[]
   participations     EventParticipant[]
-  knownContacts      KnownContact[]
   phoneTokens        PhoneVerificationToken[]
   friendshipsSent     Friendship[] @relation("FriendshipRequester")
   friendshipsReceived Friendship[] @relation("FriendshipAddressee")
@@ -349,22 +348,6 @@ model EventVote {
 
   @@unique([participantId, slotStart]) // can't vote for the same slot twice
   @@unique([participantId, rank]) // can't have two different slots at the same rank
-}
-
-// An email a user has previously added to any event or saved group --
-// purely a personal autocomplete list, not a real "friends" relationship
-// (no reciprocity, no acceptance). Lets the email input suggest addresses
-// you've typed before instead of retyping the same person every time.
-model KnownContact {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  email String
-
-  createdAt DateTime @default(now())
-
-  @@unique([userId, email])
 }
 
 enum FriendshipStatus {

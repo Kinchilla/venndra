@@ -101,8 +101,8 @@ const UPSTREAM_EVENT_SELECT = {
  *      invite, exactly as if they'd hit "Leave this event" on each one. The
  *      event itself carries on for everyone else.
  *   3. Then the database work, in one transaction: their participant rows,
- *      their address out of other people's saved groups and autocomplete
- *      lists, and finally the user itself.
+ *      their address out of other people's saved groups, and finally the
+ *      user itself.
  *
  * Step 3's last statement does most of the work by cascade (see the
  * onDelete: Cascade relations in prisma/schema.prisma): sessions, OAuth
@@ -158,9 +158,6 @@ export async function DELETE() {
     prisma.eventParticipant.deleteMany({
       where: email ? { OR: [{ userId }, { email }] } : { userId },
     }),
-    // Other people's autocomplete shouldn't keep offering an address that
-    // no longer belongs to anyone.
-    ...(email ? [prisma.knownContact.deleteMany({ where: { email } })] : []),
     // Saved groups store bare addresses in a text[], so this is the one
     // place a hand-written UPDATE beats anything Prisma can express.
     ...(email
