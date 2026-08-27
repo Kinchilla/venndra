@@ -5,6 +5,15 @@ generator client {
 datasource db {
   provider = "postgresql" // works great on a free Supabase or Neon Postgres instance
   url      = env("DATABASE_URL")
+
+  // Migrations go direct, not through the connection pooler. `prisma migrate`
+  // takes a Postgres advisory lock for the length of the run, and a pooler
+  // hands consecutive statements to different backend connections -- so the
+  // lock is taken on one connection and waited on from another, and the
+  // command hangs forever instead of failing cleanly. That has already cost
+  // time here once. The app itself keeps using the pooled DATABASE_URL above,
+  // which is what a serverless deployment needs.
+  directUrl = env("DIRECT_URL")
 }
 
 // ---- NextAuth required tables ----

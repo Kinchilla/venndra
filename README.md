@@ -55,7 +55,7 @@ be pre-authorized to read your friends' calendars.
 Then:
 
 ```bash
-cp .env.example .env   # fill in the credentials above, plus DATABASE_URL
+cp .env.example .env   # credentials above, plus DATABASE_URL and DIRECT_URL
 npm install
 npx prisma migrate dev --name init
 npm run dev
