@@ -81,9 +81,22 @@ jobs:
           DATABASE_URL: ${{ secrets.PROD_DIRECT_URL }}
         run: |
           if [ -z "$DIRECT_URL" ]; then
-            echo "::warning::PROD_DIRECT_URL is not set, so nothing was checked. Set it with: gh secret set PROD_DIRECT_URL"
+            echo "::warning::NOTHING WAS CHECKED -- PROD_DIRECT_URL is not set, so this job passed without asking production anything. Set it with: gh secret set PROD_DIRECT_URL"
             exit 0
           fi
-          npx prisma migrate status && exit 0
+
+          # The name promises a direct connection. A pooled one still answers
+          # this read-only question correctly, so this is a notice rather than
+          # a failure -- but any real migrate command run with that value would
+          # hang on the advisory lock, so say so where it will be seen.
+          case "$DIRECT_URL" in
+            *-pooler.*)
+              echo "::notice::PROD_DIRECT_URL holds the POOLED host (-pooler is still in the hostname). Harmless for this check; re-set it to the direct host so the name stays true." ;;
+          esac
+
+          if npx prisma migrate status; then
+            echo "OK: production has every migration in prisma/migrations. Nothing to apply."
+            exit 0
+          fi
           echo "::error::Production is behind this repo's migrations. Run: npm run migrate:deploy (against production -- the value in .env is the dev branch). This check goes green on its own once you have."
           exit 1
