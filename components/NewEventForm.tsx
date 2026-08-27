@@ -90,6 +90,23 @@ function useNumberField(initial: number, floor: number) {
 export default function NewEventForm({ initialDefaultFilters }: { initialDefaultFilters: WeeklyHours | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Whether this arrival is editing an existing event rather than starting a
+  // new one. Read as a question ("are we editing?") by everything to do with
+  // the sessionStorage draft below, which is insulated from this path
+  // entirely: it neither offers a draft, restores one, nor saves one. The
+  // prefill effect and handleSubmit still read the id itself, because they
+  // need to know WHICH event, not merely that there is one.
+  //
+  // Insulating it is not tidiness. The draft system used to run here in both
+  // directions, and both were destructive. Arriving on this page overwrote
+  // whatever half-finished event was in storage with the event being edited,
+  // losing it with no click at all. And the "You have an unfinished event
+  // draft" offer appeared here too, where accepting it replaced every field
+  // with unrelated content while `fromEvent` stayed in the URL -- so
+  // submitting deleted the event being edited and put the draft in its place.
+  // Edit, Restore, Submit: three clicks to destroy an event nobody meant to
+  // touch.
+  const isEditingExistingEvent = !!searchParams.get("fromEvent");
   const { data: session } = useSession();
   const [groups, setGroups] = useState<SavedGroup[]>([]);
 
@@ -107,6 +124,14 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   // min attribute -- kept separate since it's a plain read-only derived
   // value (never edited), unlike startDate/endDate themselves.
   const todayLocal = useClientValue(() => localDateString(new Date()), "");
+  // Set when a search window arriving from somewhere else -- an event being
+  // edited, or a restored draft -- had to be pulled forward to start today
+  // (see clampWindowToToday). Drives the note under the date fields: silently
+  // rewriting two dates someone is about to submit is its own kind of bug, so
+  // the form says which way it moved them and why. Cleared as soon as either
+  // date is edited by hand, since past that point it is describing values that
+  // are no longer on screen.
+  const [windowShifted, setWindowShifted] = useState<null | "event-start" | "event-whole" | "draft">(null);
   const [emails, setEmails] = useState<string[]>([]);
   // False until the sessionStorage draft has been read (or ruled out). Guards
   // the persist effect below from writing blank initial state over a real draft.
@@ -133,7 +158,7 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   // the same untouched value. Skipped entirely when the draft is about to be
   // restored automatically, so the two paths can't both fire.
   const [offeredDraft, setOfferedDraft] = useState<Record<string, unknown> | null>(() =>
-    hasEventDraftRestoreFlag() ? null : readSubstantiveEventDraft()
+    hasEventDraftRestoreFlag() || isEditingExistingEvent ? null : readSubstantiveEventDraft()
   );
 
   /** Applies a stored draft to the form. Shared by the automatic restore and the Restore button, so they can never diverge on which fields come back. */
@@ -143,8 +168,28 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
     if (typeof draft.location === "string") setLocation(draft.location);
     if (typeof draft.durationHours === "number") durationHoursField.setValue(draft.durationHours);
     if (typeof draft.durationMinutes === "number") durationMinutesField.setValue(draft.durationMinutes);
-    if (typeof draft.startDate === "string") setStartDate(draft.startDate);
-    if (typeof draft.endDate === "string") setEndDate(draft.endDate);
+    // A draft written yesterday carries yesterday's "Search from" into an
+    // input whose min is today, which blocks the form on a field the user has
+    // no reason to look at -- the same trap the fromEvent prefill used to fall
+    // into, reached by leaving a tab open across midnight and then restoring.
+    //
+    // Clamped rather than left alone, even though these dates are the user's
+    // own typing rather than a value carried over on their behalf. Who typed
+    // it turns out not to matter: computeGroupAvailability discards every slot
+    // before now, so a start date in the past is inert whatever its origin,
+    // and the alternative to moving it is a form that silently refuses to be
+    // submitted. The note below says it happened.
+    if (typeof draft.startDate === "string" && typeof draft.endDate === "string") {
+      const carried = clampWindowToToday(draft.startDate, draft.endDate, localDateString(new Date()));
+      setStartDate(carried.start);
+      setEndDate(carried.end);
+      if (carried.shifted) setWindowShifted("draft");
+    } else {
+      // A draft missing one of the two dates predates them being written
+      // together; take whichever is there and leave the other at its default.
+      if (typeof draft.startDate === "string") setStartDate(draft.startDate);
+      if (typeof draft.endDate === "string") setEndDate(draft.endDate);
+    }
     if (draft.filters) setFiltersFromExternalSource(draft.filters);
     if (typeof draft.useThreshold === "boolean") setUseThreshold(draft.useThreshold);
     if (typeof draft.minAttendees === "number") minAttendeesField.setValue(draft.minAttendees);
@@ -234,11 +279,6 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   }, [session, selfPrefilled]);
 
   const [prefilledFromEvent, setPrefilledFromEvent] = useState(false);
-  // Set when the fromEvent prefill had to pull the carried-over search window
-  // forward (see clampWindowToToday). Drives the note under the date fields --
-  // silently rewriting two dates the user is about to submit is its own kind
-  // of bug, so the form says which way it moved them and why.
-  const [windowShifted, setWindowShifted] = useState<null | "start" | "whole">(null);
   // True only while a fromEvent prefill fetch is actually in flight -- lets
   // the render below hold the form back until it lands. Without this, the
   // form is interactive (and every field defaults to its normal blank/self
@@ -275,7 +315,7 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
         );
         setStartDate(carried.start);
         setEndDate(carried.end);
-        setWindowShifted(carried.shifted);
+        setWindowShifted(carried.shifted === null ? null : `event-${carried.shifted}`);
         // CHANGED: was setFilters(event.filters ?? {})
         setFiltersFromExternalSource(event.filters ?? {});
         setUseThreshold(event.minAttendees != null);
@@ -296,7 +336,7 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
     // draftLoaded is set on EVERY exit path, including the early returns --
     // the save effect below refuses to run until it's true, so missing it
     // anywhere would mean the form silently stopped persisting.
-    if (searchParams.get("fromEvent")) {
+    if (isEditingExistingEvent) {
       setDraftLoaded(true);
       return;
     }
@@ -335,6 +375,11 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   // coming back lost everything.
   useEffect(() => {
     if (!draftLoaded) return;
+    // The other half of the insulation described at isEditingExistingEvent.
+    // Without this, opening an edit form was enough to overwrite a genuine
+    // half-finished event in storage with the one being edited -- no click,
+    // no warning, and no way back to it.
+    if (isEditingExistingEvent) return;
     const draft = {
       title,
       description,
@@ -658,9 +703,11 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
 
         {windowShifted && (
           <p className="-mt-2 text-xs text-ink/50">
-            {windowShifted === "start"
+            {windowShifted === "event-start"
               ? "This search had already started, so it now runs from today. Nothing changes about which times it finds — it was never going to suggest a time in the past."
-              : "This search's dates have all passed, so it's been moved to start today and kept the same length. Change either date if that's not what you want."}
+              : windowShifted === "event-whole"
+                ? "This search's dates have all passed, so it's been moved to start today and kept the same length. Change either date if that's not what you want."
+                : "This draft's dates had passed while it sat unfinished, so the search window now starts today. Change either date if that's not what you want."}
           </p>
         )}
 
