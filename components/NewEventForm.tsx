@@ -453,7 +453,33 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
 
     const fromEventId = searchParams.get("fromEvent");
     if (fromEventId) {
-      fetch(`/api/events/${fromEventId}/cancel`, { method: "POST" }).catch(() => {});
+      // Cancel *then* delete, in that order. An edit is implemented as
+      // "create the replacement, then get rid of the original", and only
+      // getting as far as cancelling used to leave the pre-edit version
+      // sitting in the Cancelled section of /events forever, where it read
+      // as a stray duplicate rather than as the thing that was just edited.
+      //
+      // The two calls can't collapse into one: DELETE /api/events/[id]
+      // only accepts an event that's already CANCELLED, and the original is
+      // still SEARCHING at this point. Cancelling first also runs the
+      // generic upstream-calendar cleanup -- a no-op here, since Edit only
+      // ever appears on SEARCHING events, which have nothing written back
+      // to a calendar yet.
+      //
+      // Nothing recoverable is lost: there's no path that reopens a
+      // CANCELLED event (/reopen only takes CONFIRMED ones), so the
+      // original was already unreachable the moment it was cancelled.
+      //
+      // Still best-effort, exactly as the cancel call has always been. If
+      // either leg fails the worst case is the leftover Cancelled row we
+      // used to leave behind on every single edit, and it can be removed
+      // with the Delete button that cancelled events already show.
+      fetch(`/api/events/${fromEventId}/cancel`, { method: "POST" })
+        .then((cancelRes) => {
+          if (!cancelRes.ok) return;
+          return fetch(`/api/events/${fromEventId}`, { method: "DELETE" });
+        })
+        .catch(() => {});
     }
 
     sessionStorage.removeItem(EVENT_DRAFT_KEY);

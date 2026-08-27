@@ -220,10 +220,11 @@ export default function EventChip({ event }: { event: EventChipData }) {
   }
 
   function handleEdit() {
-    // Deliberately doesn't cancel the original here -- that only happens
-    // once the replacement search is actually submitted successfully
-    // (see app/events/new/page.tsx), so there's always exactly one live
-    // version of this search, never a gap where neither exists.
+    // Deliberately doesn't touch the original here -- it only gets
+    // cancelled and then deleted once the replacement search is actually
+    // submitted successfully (see components/NewEventForm.tsx), so there's
+    // always exactly one live version of this search, never a gap where
+    // neither exists.
     router.push(`/events/new?fromEvent=${event.id}`);
   }
 
