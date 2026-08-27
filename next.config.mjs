@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { withSentryConfig } from "@sentry/nextjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -64,4 +65,30 @@ const nextConfig = {
     ];
   },
 };
-export default nextConfig;
+// Issue #38. The wrapper is what makes the instrumentation hooks actually
+// run in a Next build -- Sentry.init in instrumentation.ts is necessary but on
+// its own it is not sufficient, because the tunnel route and the server-side
+// error hooks are injected here.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Source maps make a stack trace name our functions instead of Turbopack's
+  // minified chunk symbols, and uploading them needs a write-scoped auth
+  // token. Gated on that token existing rather than assumed: without it the
+  // upload step fails the build, and the DSN is meant to be the only thing
+  // anyone has to set to get this working.
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+
+  // Routes browser events through /monitoring on our own domain. Ad blockers
+  // block requests to *.ingest.sentry.io by default, and a fair share of
+  // people run one -- without this we would silently see server errors only,
+  // and would probably conclude the client SDK was broken.
+  tunnelRoute: "/monitoring",
+
+  // Build output stays readable. Deliberately no disableLogger: it is
+  // deprecated in SDK 10 and, by its own warning, does nothing under
+  // Turbopack -- which is the only builder Next 16 has.
+  silent: !process.env.CI,
+  telemetry: false,
+});
