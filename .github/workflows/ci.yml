@@ -43,3 +43,47 @@ jobs:
       # them would mean either a permanently red CI or reversing those
       # decisions by the back door.
       - run: npx eslint .
+
+  # Since #35 split `prisma migrate deploy` out of `build`, a deploy no longer
+  # moves the schema -- a person has to run `npm run migrate:deploy`. This job
+  # is the backstop for forgetting: it asks production whether it has every
+  # migration in the repo, and goes red until it does.
+  #
+  # It asks the database rather than reading the diff on purpose. A diff-based
+  # check would go red on the push that adds a migration and stay red on a
+  # re-run, because the diff never changes; this one clears itself the moment
+  # you actually migrate. Red here means "production is behind", not "you
+  # pushed something".
+  migrations:
+    # Only on pushes to main, which is the only ref that has anything to say
+    # about production -- and, deliberately, the only place the production
+    # credential is exposed to a workflow at all.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # Before the secret is in scope, so the install (and every postinstall
+      # script in the tree) never sees it.
+      - run: npm ci
+
+      - name: Production has every migration in the repo
+        env:
+          # Both, because Prisma requires every env() in the datasource block
+          # to resolve before it will run at all. `migrate` connects over
+          # directUrl regardless.
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+          DATABASE_URL: ${{ secrets.PROD_DIRECT_URL }}
+        run: |
+          if [ -z "$DIRECT_URL" ]; then
+            echo "::warning::PROD_DIRECT_URL is not set, so nothing was checked. Set it with: gh secret set PROD_DIRECT_URL"
+            exit 0
+          fi
+          npx prisma migrate status && exit 0
+          echo "::error::Production is behind this repo's migrations. Run: npm run migrate:deploy (against production -- the value in .env is the dev branch). This check goes green on its own once you have."
+          exit 1
