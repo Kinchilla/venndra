@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { addMonths } from "date-fns";
+import { addDays, addMonths, differenceInCalendarDays, parseISO } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { useSearchParams } from "next/navigation";
 import FriendPicker from "./FriendPicker";
@@ -34,6 +34,39 @@ function localDateString(d: Date): string {
 
 function isoToLocalDateString(iso: string, timezone: string): string {
   return localDateString(toZonedTime(new Date(iso), timezone));
+}
+
+/**
+ * Pull a search window that has already begun forward to start today.
+ *
+ * Only used when carrying an existing event's window onto this form. A
+ * window whose start has passed can't be carried over literally: the
+ * "Search from" input is min={todayLocal}, so the form refuses to submit and
+ * the browser reports it ("Value must be 27/08/2026 or later") against a
+ * field the user never touched. Editing a search that had been running for
+ * even a day hit that every time, with nothing on screen saying which field
+ * was wrong or why.
+ *
+ * Clamping costs nothing, because a past start was never doing anything:
+ * computeGroupAvailability (lib/availability.ts) drops every slot before
+ * `now`, so a window that opened last week has already been behaving as "from
+ * now". This makes the form show what the search was going to do anyway,
+ * rather than a start date that only ever looked meaningful.
+ *
+ * The end date moves only when it has to. While it's still ahead of the
+ * clamped start it's left exactly as it was -- "I need this to happen by the
+ * 11th" is a real choice and not this function's to overrule. Only once the
+ * WHOLE window has expired is it pushed out, and then by the original
+ * window's own length rather than some fresh default, so re-running an old
+ * search keeps the shape the user picked for it.
+ *
+ * Both dates are YYYY-MM-DD, which compares correctly with < and >=.
+ */
+function clampWindowToToday(start: string, end: string, today: string): { start: string; end: string; shifted: null | "start" | "whole" } {
+  if (start >= today) return { start, end, shifted: null };
+  if (end >= today) return { start: today, end, shifted: "start" };
+  const lengthDays = differenceInCalendarDays(parseISO(end), parseISO(start));
+  return { start: today, end: localDateString(addDays(parseISO(today), lengthDays)), shifted: "whole" };
 }
 
 function useNumberField(initial: number, floor: number) {
@@ -201,6 +234,11 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   }, [session, selfPrefilled]);
 
   const [prefilledFromEvent, setPrefilledFromEvent] = useState(false);
+  // Set when the fromEvent prefill had to pull the carried-over search window
+  // forward (see clampWindowToToday). Drives the note under the date fields --
+  // silently rewriting two dates the user is about to submit is its own kind
+  // of bug, so the form says which way it moved them and why.
+  const [windowShifted, setWindowShifted] = useState<null | "start" | "whole">(null);
   // True only while a fromEvent prefill fetch is actually in flight -- lets
   // the render below hold the form back until it lands. Without this, the
   // form is interactive (and every field defaults to its normal blank/self
@@ -227,8 +265,17 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
         setLocation(event.location ?? "");
         durationHoursField.setValue(Math.floor(event.durationMin / 60));
         durationMinutesField.setValue(event.durationMin % 60);
-        setStartDate(isoToLocalDateString(event.searchStart, event.timezone));
-        setEndDate(isoToLocalDateString(event.searchEnd, event.timezone));
+        // new Date() inside the effect, not during render -- same reason as
+        // the default-window effect above: on the server it would be the
+        // host's clock, not the visitor's.
+        const carried = clampWindowToToday(
+          isoToLocalDateString(event.searchStart, event.timezone),
+          isoToLocalDateString(event.searchEnd, event.timezone),
+          localDateString(new Date())
+        );
+        setStartDate(carried.start);
+        setEndDate(carried.end);
+        setWindowShifted(carried.shifted);
         // CHANGED: was setFilters(event.filters ?? {})
         setFiltersFromExternalSource(event.filters ?? {});
         setUseThreshold(event.minAttendees != null);
@@ -583,7 +630,12 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
               type="date"
               value={startDate}
               min={todayLocal}
-              onChange={(e) => setStartDate(e.target.value)}
+              // Once either date is edited by hand the note below is no
+              // longer describing the values on screen, so it stops.
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setWindowShifted(null);
+              }}
               required
               className="w-full rounded-lg border border-line px-3 py-2"
             />
@@ -594,12 +646,23 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
               type="date"
               value={endDate}
               min={startDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setWindowShifted(null);
+              }}
               required
               className="w-full rounded-lg border border-line px-3 py-2"
             />
           </label>
         </div>
+
+        {windowShifted && (
+          <p className="-mt-2 text-xs text-ink/50">
+            {windowShifted === "start"
+              ? "This search had already started, so it now runs from today. Nothing changes about which times it finds — it was never going to suggest a time in the past."
+              : "This search's dates have all passed, so it's been moved to start today and kept the same length. Change either date if that's not what you want."}
+          </p>
+        )}
 
         <label className="text-sm">
           <span className="mb-1 block text-ink/60">Location (optional)</span>
