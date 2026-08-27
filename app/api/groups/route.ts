@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { validateAllFriends } from "../../../lib/friends";
 import { emailListField } from "../../../lib/emailIdentity";
+import { checkRateLimit } from "../../../lib/rateLimit";
 
 const groupSchema = z.object({
   name: z.string().min(1).max(60),
@@ -37,6 +38,13 @@ export async function POST(req: NextRequest) {
 
   const userId = (session.user as any).id;
   if (!session.user.email) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
+
+  // Same write-amplification guard as event creation, and nothing more: a
+  // saved group is private to its owner and notifies nobody. Issue #41.
+  const allowed = await checkRateLimit("group-create", userId, 10);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many groups created — wait a moment and try again." }, { status: 429 });
+  }
 
   const friendError = await validateAllFriends(userId, session.user.email, parsed.data.emails);
   if (friendError) return NextResponse.json({ error: friendError }, { status: 400 });

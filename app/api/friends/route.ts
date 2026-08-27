@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { emailField } from "../../../lib/emailIdentity";
+import { checkRateLimit } from "../../../lib/rateLimit";
 
 const USER_SELECT = { id: true, name: true, email: true, image: true, pausedAt: true };
 
@@ -69,6 +70,22 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as any).id;
+
+  // Limited because of who bears the cost, not what it costs us. Every one of
+  // these puts something in front of another person, and declining a request
+  // deletes the row (the DELETE in app/api/friends/[id]) -- so the 409 below
+  // that stops you sending the same request twice does nothing to stop you
+  // sending it again the moment it is declined. Nothing on the receiving side
+  // stops the next one arriving. Issue #41.
+  //
+  // Keyed on the requester, which covers both shapes of that: re-requesting
+  // one person in a loop, and spraying many. Ten a minute is far above anyone
+  // adding friends by hand -- the form takes one typed address per request --
+  // and far below a script.
+  const allowed = await checkRateLimit("friend-request", userId, 10);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many friend requests — wait a moment and try again." }, { status: 429 });
+  }
 
   const parsed = requestSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });

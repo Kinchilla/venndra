@@ -6,6 +6,7 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { validateAllFriends, validateNoPausedInvitees } from "../../../lib/friends";
 import { emailListField } from "../../../lib/emailIdentity";
+import { checkRateLimit } from "../../../lib/rateLimit";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -57,6 +58,16 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const userId = (session.user as any).id;
+
+  // An ordinary write-amplification guard, not a harassment one: event
+  // invitations are in-app only, so a runaway loop here costs database rows
+  // rather than messages. One event fans out to a participant row per
+  // invitee, though, which is what makes it worth capping at all. Issue #41.
+  const allowed = await checkRateLimit("event-create", userId, 10);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many events created — wait a moment and try again." }, { status: 429 });
+  }
+
   const creator = await prisma.user.findUnique({ where: { id: userId } });
   if (!creator?.email) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
 
