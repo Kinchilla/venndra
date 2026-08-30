@@ -32,6 +32,23 @@ const SECRET_KEY = /token|secret|password|passwd|authorization|cookie|session|ap
  */
 const SECRET_IN_STRING = /\b(Bearer\s+[\w.\-~+/]+=*|ya29\.[\w.\-~+/]+)/gi;
 
+/**
+ * OAuth-sensitive query parameters, wherever they show up inside a URL --
+ * next-auth logs the full request URL on an OAUTH_CALLBACK_ERROR, and that
+ * URL is where Google's authorization `code` lives. Found in production,
+ * 2026-08-29: an OAUTH_CALLBACK_ERROR event carried a live `code=` value in
+ * the clear, past both SECRET_IN_STRING above (it matches neither `Bearer`
+ * nor `ya29.` -- that prefix is for access tokens, not authorization codes)
+ * and Sentry's own default scrubber (which caught `authuser` on the same URL
+ * but has no rule for `code`).
+ *
+ * `state` is deliberately NOT in this list: it's a CSRF nonce, not a
+ * credential on its own, and it's usually the exact thing worth seeing when
+ * this class of error ("state cookie was missing") is what you're debugging.
+ * The param name stays, only the value goes -- same shape as Bearer above.
+ */
+const OAUTH_PARAM_IN_STRING = /([?&](?:code|access_token|refresh_token|id_token|client_secret|session_state)=)[^&\s"']+/gi;
+
 const REDACTED = "[redacted]";
 
 /**
@@ -49,7 +66,9 @@ const REDACTED = "[redacted]";
  */
 function scrub<T>(value: T, seen: WeakSet<object>, depth = 0): T {
   if (depth > 8) return REDACTED as T;
-  if (typeof value === "string") return value.replace(SECRET_IN_STRING, REDACTED) as T;
+  if (typeof value === "string") {
+    return value.replace(SECRET_IN_STRING, REDACTED).replace(OAUTH_PARAM_IN_STRING, `$1${REDACTED}`) as T;
+  }
   if (value === null || typeof value !== "object") return value;
   if (seen.has(value)) return REDACTED as T;
   seen.add(value);
@@ -63,15 +82,34 @@ function scrub<T>(value: T, seen: WeakSet<object>, depth = 0): T {
   return out as T;
 }
 
+/**
+ * Node's own internal warning printer (DeprecationWarning, ExperimentalWarning,
+ * MaxListenersExceededWarning, ...) writes through console.error, so
+ * captureConsoleIntegration below -- installed to catch OUR OWN console.error
+ * sites -- catches Node's internal ones too as a side effect. Confirmed in
+ * production, 2026-08-29: `(node:4) [DEP0169] DeprecationWarning: url.parse()
+ * ...` arrived as an Issue despite touching none of this app's code -- a
+ * dependency (next-auth v4 is the likely source) triggers it internally.
+ * There is nothing here to act on in response to one; drop them before they
+ * spend the free tier's event quota or bury a real alert under noise.
+ */
+const NODE_PROCESS_WARNING = /^\(node:\d+\)\s*(?:\[[\w-]+\]\s*)?\w*Warning:/;
+
+function isNodeProcessWarning(event: { message?: string; exception?: { values?: { value?: string }[] } }): boolean {
+  const text = event.message ?? event.exception?.values?.[0]?.value ?? "";
+  return NODE_PROCESS_WARNING.test(text);
+}
+
 /** Applied to every outbound event, whatever the runtime. */
-function scrubEvent<T extends object>(event: T): T {
+function scrubEvent<T extends object>(event: T): T | null {
+  if (isNodeProcessWarning(event as { message?: string })) return null;
   try {
     return scrub(event, new WeakSet());
   } catch {
     // A scrubber that throws would drop the error it was meant to protect.
     // Losing the event entirely is the safe direction to fail in: better a
     // missing report than an unscrubbed one.
-    return null as unknown as T;
+    return null;
   }
 }
 
