@@ -65,5 +65,73 @@ export async function checkRateLimit(routeKey: string, subject: string, limit: n
     RETURNING "count"
   `;
 
+  // Fire-and-forget: the sweep is unrelated to this request's answer, so
+  // making the caller wait for it would add latency for no benefit. Errors
+  // are swallowed deliberately -- a failed cleanup must never turn into a
+  // failed friend request, and the next sweep will cover the same rows.
+  if (Math.random() < SWEEP_PROBABILITY) {
+    void sweepExpiredRateLimits().catch(() => {});
+  }
+
   return rows.length > 0;
+}
+
+/**
+ * How often a call also sweeps expired rows. Nothing else ever deleted from
+ * this table, so it only grew: every row in it was expired when this was
+ * added, the oldest by three weeks.
+ *
+ * A sweep is cheap because an expired row is provably meaningless -- the
+ * limiter above treats "window expired" and "no row at all" identically, so
+ * deleting one can never change a decision. That is what makes doing this
+ * opportunistically, rather than under a scheduler, a safe trade: there is
+ * no correctness cost to sweeping late, only a storage one.
+ *
+ * Rate rather than every call because the work is the same regardless of who
+ * triggers it, and rare enough that it stays off the critical path of any
+ * particular request. It also self-scales in the right direction: more
+ * traffic means more sweeps, which is exactly when the table grows fastest.
+ */
+const SWEEP_PROBABILITY = 0.01;
+
+/**
+ * Deletes rows whose window has already expired.
+ *
+ * Bounds the table, but the reason it is not merely housekeeping is the
+ * magic-link limiter: its subject is a plaintext email address, and sign-in
+ * deliberately accepts addresses that are not users yet (an unknown address
+ * is a legitimate sign-up). Without this, pointing the sign-in form at any
+ * address on earth wrote that address into the database permanently, whether
+ * or not its owner ever had anything to do with Venndra. Retention was
+ * forever because nothing ever deleted anything.
+ */
+export async function sweepExpiredRateLimits(): Promise<number> {
+  const cutoff = new Date(Date.now() - WINDOW_MS);
+  return prisma.$executeRaw`DELETE FROM "RateLimitState" WHERE "windowStart" < ${cutoff}`;
+}
+
+/**
+ * Forgets every limiter row belonging to the given subjects, whichever route
+ * recorded them. Returned rather than awaited so the caller can compose it
+ * into a transaction -- account deletion runs as one, and erasure that could
+ * half-apply is worse than none.
+ *
+ * `subjects` is what was passed to checkRateLimit as the thing being limited
+ * PER, so deleting an account means passing both its user id and its email
+ * address: most routes key on the id, but magic-link keys on the address and
+ * would otherwise outlive the account it belonged to.
+ *
+ * Matching is on everything after the FIRST colon, compared exactly, rather
+ * than a LIKE against the whole key. Route keys never contain a colon so the
+ * split is unambiguous, subjects sometimes do (`feedback` keys on
+ * `anon:<hash>`) so only the first can be the separator, and an exact
+ * comparison avoids an address containing `_` or `%` quietly matching its
+ * neighbours the way a LIKE pattern would. An empty list matches nothing,
+ * which is the right no-op.
+ */
+export function forgetRateLimitSubjects(subjects: string[]) {
+  return prisma.$executeRaw`
+    DELETE FROM "RateLimitState"
+    WHERE substring("key" from position(':' in "key") + 1) = ANY(${subjects}::text[])
+  `;
 }

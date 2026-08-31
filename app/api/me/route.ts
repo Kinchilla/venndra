@@ -6,6 +6,8 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { upcomingConfirmedWhere } from "../../../lib/eventLifecycle";
 import { deleteUpstreamEvent, removeAttendeeFromUpstreamEvent, UpstreamEvent } from "../../../lib/upstreamEvents";
+import { normalizeEmail } from "../../../lib/emailIdentity";
+import { forgetRateLimitSubjects } from "../../../lib/rateLimit";
 
 // Same shape as Event.filters / SavedGroup.defaultFilters -- day-key ->
 // array of [start, end] time-of-day windows. `null` is a meaningful,
@@ -112,8 +114,10 @@ const UPSTREAM_EVENT_SELECT = {
  * directions, dismissed suggestions, and every event they created. The
  * statements before it exist precisely because they are the things NO
  * cascade covers: EventParticipant links to User optionally, so it would be
- * left holding a null userId and their email forever, and SavedGroup.emails
- * is a plain string array with no foreign key at all.
+ * left holding a null userId and their email forever, SavedGroup.emails
+ * is a plain string array with no foreign key at all, and RateLimitState is
+ * keyed by a bare string with no relation to anything -- which for the
+ * magic-link limiter means a row whose key IS the address being erased.
  */
 export async function DELETE() {
   const session = await getServerSession(authOptions);
@@ -169,6 +173,12 @@ export async function DELETE() {
           prisma.$executeRaw`DELETE FROM "SavedGroup" WHERE cardinality(emails) = 0`,
         ]
       : []),
+    // Keyed by a bare string, so no cascade reaches these. Both identifiers
+    // are passed because the limiters disagree about what they count per:
+    // most key on the user id, magic-link keys on the address, and that last
+    // one is the row that would otherwise leave a deleted account's email
+    // address sitting in the database indefinitely.
+    forgetRateLimitSubjects(email ? [userId, normalizeEmail(email)] : [userId]),
     prisma.user.delete({ where: { id: userId } }),
   ]);
 
