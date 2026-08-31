@@ -38,6 +38,17 @@ const WINDOW_MS = 60_000; // 1 minute
  * through). Folding both into one `INSERT ... ON CONFLICT DO UPDATE`
  * closes that: Postgres takes a row lock for the conflicting update, so
  * concurrent callers serialize on it instead of racing.
+ *
+ * The `WHERE` on the DO UPDATE is what makes a rejection cost nothing to
+ * store. Without it the statement still wrote on every call, so a caller
+ * being actively throttled generated one row write per rejected request --
+ * exactly backwards for a limiter, whose job under a flood is to shed load
+ * more cheaply than the work it is protecting. A request that is already
+ * over the cap now matches no row, so Postgres performs no write and
+ * `RETURNING` yields nothing. That empty result IS the rejection, which is
+ * why this returns on `rows.length` rather than comparing a count: the only
+ * way to get a row back is to have been allowed. It also keeps `count`
+ * bounded by `limit` instead of climbing for as long as a flood lasts.
  */
 export async function checkRateLimit(routeKey: string, subject: string, limit: number): Promise<boolean> {
   const key = `${routeKey}:${subject}`;
@@ -50,11 +61,9 @@ export async function checkRateLimit(routeKey: string, subject: string, limit: n
     ON CONFLICT ("key") DO UPDATE SET
       "count" = CASE WHEN r."windowStart" < ${cutoff} THEN 1 ELSE r."count" + 1 END,
       "windowStart" = CASE WHEN r."windowStart" < ${cutoff} THEN ${now} ELSE r."windowStart" END
+    WHERE r."windowStart" < ${cutoff} OR r."count" < ${limit}
     RETURNING "count"
   `;
 
-  // A fresh row or a just-reset window always starts at count = 1, which is
-  // <= any real limit, so this one comparison covers both the reset case
-  // and the increment case -- no separate "no record yet" branch needed.
-  return rows[0].count <= limit;
+  return rows.length > 0;
 }
