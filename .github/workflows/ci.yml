@@ -44,6 +44,16 @@ jobs:
       # decisions by the back door.
       - run: npx eslint .
 
+      # Added by #42. Deliberately a small set of characterization tests over
+      # pure logic -- no database, no HTTP, no React -- so this stays fast and
+      # needs no services. It exists mainly so that #30's "behaviour
+      # preserving" refactor has something that can actually check the claim.
+      #
+      # It runs here rather than only locally for the reason the whole
+      # workflow exists: a check a person has to remember to run is a check
+      # that eventually doesn't get run.
+      - run: npm test
+
   # Since #35 split `prisma migrate deploy` out of `build`, a deploy no longer
   # moves the schema -- a person has to run `npm run migrate:deploy`. This job
   # is the backstop for forgetting: it asks production whether it has every
