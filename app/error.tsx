@@ -37,7 +37,7 @@ export default function Error({
     <main className="mx-auto flex max-w-5xl flex-col items-center px-6 py-24 text-center">
       <h1 className="font-display text-4xl font-semibold">Something went wrong</h1>
       <p className="mt-4 max-w-md text-ink/70">
-        That's on us, not you. It's been reported -- try again, or head back home.
+        That&apos;s on us, not you. It&apos;s been reported -- try again, or head back home.
       </p>
       {error.digest && (
         <p className="mt-4 font-mono-tight text-xs text-ink/40">Reference: {error.digest}</p>
