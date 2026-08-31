@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { fromZonedTime } from "date-fns-tz";
 import { buildSlots, type SlotParticipant, type WeeklyHours } from "./availabilitySlots";
 import type { BusyInterval } from "./calendar/google";
 
@@ -10,6 +11,14 @@ import type { BusyInterval } from "./calendar/google";
  * Every input is fixed, including `now`, so these say the same thing in a
  * year as they do today. That is the whole point of injecting the clock.
  */
+
+/**
+ * How app/api/events/route.ts actually stores a chosen date: midnight in the
+ * creator's timezone, as a UTC instant. Tests build their inputs through this
+ * rather than hand-writing a "...T00:00:00Z", because the two only agree for
+ * creators at or west of UTC -- which is exactly the bug this file caught.
+ */
+const storedDate = (isoDate: string, tz: string) => fromZonedTime(`${isoDate}T00:00:00`, tz);
 
 // A Thursday, deliberately: enough that a wrong day-key lookup shows up as a
 // missing window rather than accidentally matching.
@@ -115,43 +124,50 @@ describe("slot generation", () => {
 });
 
 describe("timezones", () => {
-  // Pinned, and flagged on #42 rather than fixed here.
-  //
-  // Which day's windows apply is decided by `startOfDay(searchStart)` and
-  // `day.getDay()`, and both are LOCAL-time operations -- local to the server
-  // process, not to creatorTimezone. The window's time-of-day, meanwhile, IS
-  // resolved in creatorTimezone via fromZonedTime. So the two halves of one
-  // decision use two different clocks.
-  //
-  // The consequence is real: 2026-09-03T00:00:00Z is Thursday in UTC and
-  // Wednesday in America/Denver, so this same call returns three slots on
-  // Vercel and none on a laptop in Denver. That is why vitest.config.mts pins
-  // TZ=UTC -- these tests assert the PRODUCTION behaviour, and without the pin
-  // they would pass locally and fail in CI.
-  //
-  // Left alone deliberately: this change is behaviour-preserving, and #30
-  // lists date/time handling as one of the things it exists to look at.
-  it("derives the day key from the server's timezone, not the creator's", () => {
-    const slots = run({
-      searchStart: new Date("2026-09-03T00:00:00Z"),
-      searchEnd: new Date("2026-09-03T00:00:00Z"),
-      filters: { thu: [["09:00", "11:00"]] } as WeeklyHours,
-      creatorTimezone: "Asia/Tokyo",
+  // These build searchStart the way the app stores it -- midnight in the
+  // creator's timezone -- because the difference between that and a raw
+  // "...T00:00:00Z" is precisely the bug this file caught. Feeding in the raw
+  // instant is what an earlier version of these tests did, and it made a
+  // Denver creator look correct while hiding that Tokyo was broken.
+  const thursdayOnly = { thu: [["09:00", "11:00"]] } as WeeklyHours;
+  const forCreator = (tz: string) =>
+    run({
+      creatorTimezone: tz,
+      filters: thursdayOnly,
+      searchStart: storedDate("2026-09-03", tz),
+      searchEnd: storedDate("2026-09-03", tz),
     });
-    // Thursday under TZ=UTC, regardless of the creator being in Tokyo.
-    expect(slots.length).toBeGreaterThan(0);
+
+  it("takes the day key from the creator's timezone, not the server's", () => {
+    // Tokyo's midnight-on-the-3rd is the 2nd in UTC. Reading the day off the
+    // raw instant gave "wed" and dropped every slot.
+    expect(forCreator("Asia/Tokyo")).toHaveLength(3);
   });
 
-  it("interprets window times in the creator's timezone, not UTC", () => {
-    const slots = run({ creatorTimezone: "America/Denver" });
+  it("interprets window times in the creator's timezone", () => {
     // 09:00 in Denver (MDT, UTC-6) is 15:00 UTC.
-    expect(slots[0].start.toISOString()).toBe("2026-09-03T15:00:00.000Z");
+    expect(forCreator("America/Denver")[0].start.toISOString()).toBe("2026-09-03T15:00:00.000Z");
   });
 
-  it("produces the same wall-clock time across timezones with different offsets", () => {
-    const denver = run({ creatorTimezone: "America/Denver" })[0];
-    const utc = run({ creatorTimezone: "UTC" })[0];
+  it("resolves one wall-clock time to different instants across offsets", () => {
+    const denver = forCreator("America/Denver")[0];
+    const utc = forCreator("UTC")[0];
     expect(denver.start.toISOString()).not.toBe(utc.start.toISOString());
+  });
+
+  // A DST transition inside the creator's own timezone. US DST ended on
+  // 1 November 2026, so this Sunday has a 25-hour day. The window must still
+  // resolve to 09:00 local, and the day arithmetic must not slip a date.
+  it("survives a DST transition in the creator's timezone", () => {
+    const slots = run({
+      creatorTimezone: "America/Denver",
+      filters: { sun: [["09:00", "11:00"]] } as WeeklyHours,
+      searchStart: storedDate("2026-11-01", "America/Denver"),
+      searchEnd: storedDate("2026-11-01", "America/Denver"),
+    });
+    expect(slots).toHaveLength(3);
+    // 09:00 MST (UTC-7) after the change, not 15:00Z as it would be in MDT.
+    expect(slots[0].start.toISOString()).toBe("2026-11-01T16:00:00.000Z");
   });
 });
 
@@ -243,10 +259,10 @@ describe("counts", () => {
       ]),
     });
     expect(slots[0].participants.map((p) => p.status)).toEqual(["free", "tentative"]);
-    // Pinned, and worth noticing: the Slot type's comment says availableCount
-    // is "free + tentative", but the code counts only "free". The comment and
-    // the code disagree. Recording the CODE's behaviour, per #42 -- the
-    // discrepancy is flagged on the issue rather than fixed here.
+    // The comment on Slot.availableCount used to say "free + tentative" while
+    // the code counted only free. Resolved 2026-08-31 in favour of the code,
+    // because every reader of this number is shown the word "free". This test
+    // is what holds that decision in place.
     expect(slots[0].availableCount).toBe(1);
   });
 
@@ -262,5 +278,55 @@ describe("counts", () => {
     });
     expect(slots[0].totalConnected).toBe(0);
     expect(slots[0].participants[0].status).toBe("unknown");
+  });
+});
+
+describe("the creator's calendar day, east and west of UTC", () => {
+  // searchStart is stored as midnight in the CREATOR's timezone, expressed as
+  // a UTC instant (app/api/events/route.ts). Recovering "which calendar day
+  // did they pick" therefore requires converting back through that timezone.
+  //
+  // These run the same Thursday-only filter for creators either side of UTC.
+  // They should behave identically: both picked Thursday 3 September.
+  const thursdayOnly = { thu: [["09:00", "11:00"]] } as WeeklyHours;
+
+  function forCreator(tz: string) {
+    return buildSlots({
+      creatorTimezone: tz,
+      filters: thursdayOnly,
+      durationMin: 60,
+      searchStart: storedDate("2026-09-03", tz),
+      searchEnd: storedDate("2026-09-03", tz),
+      participants: [connected("a@x.com")],
+      busyByEmail: new Map(),
+      errorByEmail: new Map(),
+      now: LONG_AGO,
+    });
+  }
+
+  it("finds the Thursday windows for a creator west of UTC", () => {
+    expect(forCreator("America/Denver")).toHaveLength(3);
+  });
+
+  it("finds the Thursday windows for a creator at UTC", () => {
+    expect(forCreator("UTC")).toHaveLength(3);
+  });
+
+  // Tokyo is UTC+9, so their midnight-3-September is 2 September 15:00Z. Any
+  // day-key derived from the raw instant reads that as Wednesday and applies
+  // the wrong day's windows -- or, as here, none at all.
+  it("finds the Thursday windows for a creator east of UTC", () => {
+    expect(forCreator("Asia/Tokyo")).toHaveLength(3);
+  });
+
+  it("puts the slots on the creator's chosen date, not a neighbouring one", () => {
+    for (const tz of ["America/Denver", "UTC", "Asia/Tokyo", "Europe/Berlin", "Australia/Sydney"]) {
+      const slots = forCreator(tz);
+      expect(slots.length, `${tz} produced no slots`).toBeGreaterThan(0);
+      // 09:00 local on the 3rd, whatever that is in UTC.
+      expect(slots[0].start.toISOString(), tz).toBe(
+        fromZonedTime("2026-09-03T09:00:00", tz).toISOString()
+      );
+    }
   });
 });

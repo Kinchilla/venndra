@@ -17,15 +17,19 @@ export default defineConfig({
     include: ["lib/**/*.test.ts"],
     environment: "node",
 
-    // Pinned to UTC because some of the code under test is sensitive to the
-    // SERVER's timezone, not just the user's -- lib/availabilitySlots decides
-    // which day's filter windows apply using `startOfDay` and `getDay()`,
-    // which are local-time operations. Vercel runs UTC, so this makes a local
-    // run and a CI run agree with production rather than with whoever's laptop
-    // is running them. Without it these tests pass in Denver and fail in CI.
+    // Pinned, and deliberately NOT to UTC.
     //
-    // It is a test-environment decision, not a fix: the underlying
-    // timezone-sensitivity is real and is flagged on #42 for #30 to look at.
-    env: { TZ: "UTC" },
+    // Production runs UTC, so pinning tests to UTC would let server-timezone
+    // dependence pass unnoticed -- which is exactly what happened: slot
+    // building read the calendar day off the raw instant with server-local
+    // getters, worked for every creator at or west of UTC, and returned
+    // nothing at all for anyone east of it. Fixed 2026-08-31.
+    //
+    // Running the suite in a zone production never uses turns "does this
+    // depend on where it runs" into something the tests answer. If that
+    // dependence comes back, these go red rather than staying green until
+    // somebody in Tokyo files a bug. Tokyo specifically because it is ahead of
+    // UTC, which is the direction that was broken.
+    env: { TZ: "Asia/Tokyo" },
   },
 });

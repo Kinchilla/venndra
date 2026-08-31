@@ -1,5 +1,5 @@
-import { addDays, addMinutes, startOfDay, differenceInCalendarDays } from "date-fns";
-import { fromZonedTime } from "date-fns-tz";
+import { addDays, addMinutes } from "date-fns";
+import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import type { BusyInterval } from "./calendar/google";
 
 /**
@@ -48,7 +48,18 @@ export type ParticipantAvailability = {
 export type Slot = {
   start: Date;
   end: Date;
-  availableCount: number; // free + tentative, excludes busy and unknown
+  /**
+   * How many participants are FREE -- tentative, busy, unknown and error all
+   * excluded.
+   *
+   * This said "free + tentative" until 2026-08-31 and the code never did that.
+   * The code is what is right: every use of this number is labelled "free" to
+   * the person reading it -- "3/5 free" in EventResults, "2+ people free" on
+   * EventChip -- and app/api/events/[id]/availability filters on
+   * `availableCount >= minAttendees` to honour the organiser's "at least N
+   * free". Counting a tentative person here would make all three overstate.
+   */
+  availableCount: number;
   totalConnected: number; // how many participants have a calendar connected at all
   participants: ParticipantAvailability[];
 };
@@ -114,11 +125,38 @@ export function buildSlots(params: {
   const slots: Slot[] = [];
   const stepMin = 30; // slot granularity, independent of meeting duration
 
-  const totalDays = Math.max(0, differenceInCalendarDays(searchEnd, searchStart) + 1);
+  // Which calendar day is this, to the person who picked it?
+  //
+  // searchStart is stored as midnight in the creator's timezone expressed as a
+  // UTC instant (app/api/events/route.ts), so the only way back to the date
+  // they actually chose is through that timezone. This used to read the day
+  // straight off the instant with startOfDay/getDay, which are server-local,
+  // and that quietly worked only for creators at or west of UTC. For anyone
+  // east of it the stored instant falls on the previous UTC date: a creator in
+  // Tokyo picking Thursday 3 September stores 2 September 15:00Z, the day key
+  // came out "wed", and a Thursday-only filter produced no slots at all.
+  //
+  // Everything below is deliberately UTC-anchored. The labels come from
+  // formatInTimeZone, which reads a real instant through a timezone without
+  // going via a Date whose local fields have been shifted to fake it -- that
+  // trick is the usual way to do this and it breaks on the two days a year
+  // when the shifted value lands on a time the SERVER's own timezone skips.
+  // Anchoring each day at 12:00Z and stepping in UTC keeps the arithmetic away
+  // from every DST boundary, in both timezones, permanently.
+  const startLabel = formatInTimeZone(searchStart, creatorTimezone, "yyyy-MM-dd");
+  const endLabel = formatInTimeZone(searchEnd, creatorTimezone, "yyyy-MM-dd");
+  const firstDay = new Date(`${startLabel}T12:00:00Z`);
+  const lastDay = new Date(`${endLabel}T12:00:00Z`);
+
+  const MS_PER_DAY = 86_400_000;
+  const totalDays = Math.max(0, Math.round((lastDay.getTime() - firstDay.getTime()) / MS_PER_DAY) + 1);
 
   for (let dayOffset = 0; dayOffset < totalDays; dayOffset++) {
-    const day = addDays(startOfDay(searchStart), dayOffset);
-    const dayKey = DAY_KEYS[day.getDay()];
+    const day = addDays(firstDay, dayOffset);
+    // getUTCDay, not getDay: `day` is a noon-UTC anchor standing for a date in
+    // the creator's timezone, so its UTC fields are the ones that mean
+    // anything. getDay would put the server back into the answer.
+    const dayKey = DAY_KEYS[day.getUTCDay()];
     const windows = effectiveFilters[dayKey] ?? [];
 
     for (const [startStr, endStr] of windows) {
