@@ -14,7 +14,7 @@
  * existed -- an acceptable floor for a convenience feature.
  */
 
-import type { WeeklyHours } from "../components/FiltersBuilder";
+import type { WeeklyHours } from "./searchWindow";
 
 const KEY = "venndra:new-group-handoff";
 

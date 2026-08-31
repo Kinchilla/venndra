@@ -4,7 +4,7 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { hasUsableCalendar } from "../../../lib/onboarding";
 import NewEventForm from "../../../components/NewEventForm";
-import { WeeklyHours } from "../../../components/FiltersBuilder";
+import type { WeeklyHours } from "../../../lib/searchWindow";
 
 export default async function NewEventPage() {
   const session = await getServerSession(authOptions);

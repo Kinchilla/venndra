@@ -1,6 +1,7 @@
 import { addDays, addMinutes } from "date-fns";
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import type { BusyInterval } from "./calendar/google";
+import type { WeeklyHours } from "./searchWindow";
 
 /**
  * The pure half of availability: given everyone's busy intervals, work out
@@ -27,17 +28,9 @@ import type { BusyInterval } from "./calendar/google";
 
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
-/**
- * Day key -> the time-of-day windows open on that day, as ["HH:MM", "HH:MM"].
- * Same shape as Event.filters and SavedGroup.defaultFilters.
- *
- * Note for #30: this type is declared three times in the codebase -- here,
- * and independently in components/FiltersBuilder and components/EventResults.
- * Left alone deliberately. This change is meant to be behaviour-preserving,
- * and consolidating duplicate declarations is exactly the judgement call #30
- * exists to make on purpose rather than as a side effect of something else.
- */
-export type WeeklyHours = Record<string, [string, string][]>;
+// Re-exported so this module's callers need only one import. Declared in
+// lib/searchWindow -- see the note there.
+export type { WeeklyHours } from "./searchWindow";
 
 export type ParticipantAvailability = {
   email: string;

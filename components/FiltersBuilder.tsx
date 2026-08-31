@@ -13,7 +13,7 @@ const DAYS: { key: string; label: string }[] = [
 ];
 
 type Rule = { id: string; days: string[]; start: string; end: string };
-export type WeeklyHours = Record<string, [string, string][]>;
+import type { WeeklyHours } from "../lib/searchWindow";
 
 function rulesToWeeklyHours(rules: Rule[]): WeeklyHours {
   const out: WeeklyHours = {};

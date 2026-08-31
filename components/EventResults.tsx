@@ -5,13 +5,31 @@ import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
 import { buttonClass } from "../lib/buttonStyles";
 import { displayName } from "../lib/displayName";
+import type { ParticipantAvailability } from "../lib/availabilitySlots";
 
-type ParticipantStatus = "free" | "tentative" | "busy" | "unknown" | "error";
+// ParticipantAvailability is imported, not redeclared (#30). The availability
+// route hands `participants` through untouched -- no toISOString, no reshaping
+// -- so the wire shape IS the server shape, and a second declaration could
+// only ever drift from it. Type-only, so nothing from lib/ reaches this
+// bundle.
+//
 // `email` is the join key -- votes come back keyed by address (TallyEntry
 // below) and EventParticipant is uniquely keyed on [eventId, email]. It is
 // matched on, never rendered: this table is visible to every attendee, so the
 // label goes through lib/displayName. Issue #6.
-type ParticipantAvailability = { email: string; name: string | null; status: ParticipantStatus };
+type ParticipantStatus = ParticipantAvailability["status"];
+
+/**
+ * The wire form of lib/availabilitySlots' Slot, and deliberately NOT that
+ * type -- the one duplicate here that is not duplication.
+ *
+ * The route JSON-encodes start and end with toISOString, so they arrive as
+ * strings where the server holds Dates. One shared declaration would force one
+ * of the two sides to lie about what it is holding, and a Date-typed value
+ * that is really a string is the kind of thing that type-checks all the way to
+ * a runtime crash. `participants` is the shared type precisely because that
+ * field does cross unchanged.
+ */
 type Slot = {
   start: string;
   end: string;

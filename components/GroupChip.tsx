@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { WeeklyHours } from "./FiltersBuilder";
+import type { WeeklyHours } from "../lib/searchWindow";
 import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
 import Avatar from "./Avatar";

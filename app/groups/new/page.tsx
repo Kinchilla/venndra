@@ -4,7 +4,7 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import BackButton from "../../../components/BackButton";
 import GroupForm from "../../../components/GroupForm";
-import { WeeklyHours } from "../../../components/FiltersBuilder";
+import type { WeeklyHours } from "../../../lib/searchWindow";
 
 export default async function NewGroupPage() {
   const session = await getServerSession(authOptions);

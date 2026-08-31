@@ -9,7 +9,7 @@ import { smsConfigured } from "../../lib/sms";
 import BackButton from "../../components/BackButton";
 import ProfileForm from "../../components/ProfileForm";
 import DefaultSearchTimesForm from "../../components/DefaultSearchTimesForm";
-import { WeeklyHours } from "../../components/FiltersBuilder";
+import type { WeeklyHours } from "../../lib/searchWindow";
 import CalendarSourcesPanel from "../../components/CalendarSourcesPanel";
 import ConnectedAccountsSection from "../../components/ConnectedAccountsSection";
 import LogoutButton from "../../components/LogoutButton";

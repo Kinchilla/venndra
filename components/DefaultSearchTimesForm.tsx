@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import FiltersBuilder, { WeeklyHours } from "./FiltersBuilder";
+import FiltersBuilder from "./FiltersBuilder";
+import type { WeeklyHours } from "../lib/searchWindow";
 import { buttonClass } from "../lib/buttonStyles";
 
 export default function DefaultSearchTimesForm({ initialFilters }: { initialFilters: WeeklyHours | null }) {

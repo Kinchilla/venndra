@@ -8,7 +8,8 @@ import { addDays, addMonths, differenceInCalendarDays, parseISO } from "date-fns
 import { toZonedTime } from "date-fns-tz";
 import { useSearchParams } from "next/navigation";
 import FriendPicker from "./FriendPicker";
-import FiltersBuilder, { WeeklyHours } from "./FiltersBuilder";
+import FiltersBuilder from "./FiltersBuilder";
+import type { WeeklyHours } from "../lib/searchWindow";
 import BackButton from "./BackButton";
 import { useClientValue } from "../hooks/useClientValue";
 import { buttonClass } from "../lib/buttonStyles";
