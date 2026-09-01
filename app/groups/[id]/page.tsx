@@ -11,11 +11,11 @@ export default async function EditGroupPage(props: { params: Promise<{ id: strin
   if (!session?.user) redirect(`/login?callbackUrl=/groups/${params.id}`);
 
   const group = await prisma.savedGroup.findUnique({ where: { id: params.id } });
-  if (!group || group.userId !== (session.user as any).id) notFound();
+  if (!group || group.userId !== session.user.id) notFound();
 
   // Seeds the picker if this group has no window yet and the user switches the
   // toggle on -- otherwise they'd start from a blank grid.
-  const user = await prisma.user.findUnique({ where: { id: (session.user as any).id } });
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
 
   return (
     <main className="mx-auto max-w-lg px-6 py-12">

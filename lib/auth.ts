@@ -185,8 +185,8 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async session({ session, user }) {
       if (session.user) {
-        (session.user as any).id = user.id;
-        (session.user as any).timezone = (user as any).timezone;
+        session.user.id = user.id;
+        session.user.timezone = user.timezone;
       }
       return session;
     },

@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
   });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   const isInvolved =
     event.creatorId === userId || event.participants.some((p) => p.email === session.user!.email);
   if (!isInvolved) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -30,7 +30,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   if (event.creatorId !== userId) {
     return NextResponse.json({ error: "Only the event creator can delete this" }, { status: 403 });
   }

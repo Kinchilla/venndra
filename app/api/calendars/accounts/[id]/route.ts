@@ -50,7 +50,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   const calendar = await prisma.connectedCalendar.findUnique({
     where: { id: params.id },

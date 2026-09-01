@@ -27,7 +27,7 @@ const saveSchema = z.object({
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   const parsed = saveSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Enter a phone number." }, { status: 400 });
@@ -58,7 +58,7 @@ export async function PUT() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const result = await resendPhoneVerification((session.user as any).id);
+  const result = await resendPhoneVerification(session.user.id);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
 
   return NextResponse.json({ ok: true, sent: true });
@@ -75,7 +75,7 @@ export async function PUT() {
 export async function DELETE() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   await prisma.$transaction([
     prisma.phoneVerificationToken.deleteMany({ where: { userId } }),

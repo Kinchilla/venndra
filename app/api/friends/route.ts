@@ -21,7 +21,7 @@ function toFriendUser<T extends { pausedAt: Date | null }>({ pausedAt, ...user }
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   const [sent, received] = await Promise.all([
     prisma.friendship.findMany({ where: { requesterId: userId }, include: { addressee: { select: USER_SELECT } } }),
@@ -69,7 +69,7 @@ const requestSchema = z.union([
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   // Limited because of who bears the cost, not what it costs us. Every one of
   // these puts something in front of another person, and declining a request

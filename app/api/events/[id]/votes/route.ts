@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
   });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   const myParticipant = event.participants.find((p) => p.email === session.user!.email);
   const isInvolved = event.creatorId === userId || !!myParticipant;
   if (!isInvolved) return NextResponse.json({ error: "Not found" }, { status: 404 });

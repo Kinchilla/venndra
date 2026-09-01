@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   // unpause/repause -- "paused since" means since this pause, not since the
   // first one they ever did.
   const user = await prisma.user.update({
-    where: { id: (session.user as any).id },
+    where: { id: session.user.id },
     data: { pausedAt: parsed.data.paused ? new Date() : null },
     select: { pausedAt: true },
   });

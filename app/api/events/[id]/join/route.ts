@@ -9,7 +9,7 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   const allowed = await checkRateLimit("join", userId, 10);
   if (!allowed) {

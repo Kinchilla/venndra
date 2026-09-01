@@ -36,7 +36,7 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   const userEmail = session.user.email;
 
   const events = await prisma.event.findMany({
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   const parsed = eventSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   // An ordinary write-amplification guard, not a harassment one: event
   // invitations are in-app only, so a runaway loop here costs database rows

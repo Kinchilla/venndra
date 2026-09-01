@@ -24,7 +24,7 @@ export default async function SettingsPage(
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login?callbackUrl=/settings");
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) redirect("/login");
 

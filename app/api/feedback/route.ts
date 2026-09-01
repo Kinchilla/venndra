@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   if (parsed.data.website) return NextResponse.json({ ok: true });
 
   const session = await getServerSession(authOptions);
-  const userId = session?.user ? ((session.user as any).id as string) : null;
+  const userId = session?.user?.id ?? null;
 
   const result = await submitFeedback(
     {

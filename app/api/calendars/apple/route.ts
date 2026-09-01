@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const { appleId, appSpecificPassword, label } = parsed.data;
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   // Re-adding an iCloud account that's already here -- most likely one
   // disconnected earlier, or one whose app-specific password was revoked at

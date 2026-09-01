@@ -14,7 +14,7 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   if (event.creatorId !== userId) {
     return NextResponse.json({ error: "Only the event creator can reschedule" }, { status: 403 });
   }

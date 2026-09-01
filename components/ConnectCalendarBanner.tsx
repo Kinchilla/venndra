@@ -27,7 +27,7 @@ export default async function ConnectCalendarBanner() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return null;
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   if (await hasUsableCalendar(userId)) return null;
 
   return (

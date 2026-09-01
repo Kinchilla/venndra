@@ -29,7 +29,7 @@ export default async function VerifyPhonePage(props: { searchParams?: Promise<{ 
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: (session.user as any).id },
+    where: { id: session.user.id },
     select: { phone: true, phoneCountry: true, phoneVerifiedAt: true },
   });
 

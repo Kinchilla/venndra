@@ -13,7 +13,7 @@ import DisplayNameBanner from "../../components/DisplayNameBanner";
 export default async function GroupsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   const groups = await prisma.savedGroup.findMany({
     where: { userId },

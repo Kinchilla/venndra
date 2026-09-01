@@ -510,7 +510,7 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
         durationMin,
         searchStart: startDate,
         searchEnd: endDate,
-        timezone: (session?.user as any)?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezone: session?.user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
         filters,
         minAttendees: useThreshold ? minAttendeesField.numericValue : undefined,
         votingEnabled,

@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const parsed = z.object({ token: z.string().min(1).max(64) }).safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "That link is missing its code." }, { status: 400 });
 
-  const result = await redeemPhoneToken(parsed.data.token, (session.user as any).id);
+  const result = await redeemPhoneToken(parsed.data.token, session.user.id);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 
   return NextResponse.json({ ok: true, phone: result.phone });

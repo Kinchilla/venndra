@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   if (event.creatorId !== userId) {
     return NextResponse.json({ error: "Only the event creator can confirm a slot" }, { status: 403 });
   }

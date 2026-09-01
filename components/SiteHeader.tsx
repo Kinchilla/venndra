@@ -10,7 +10,7 @@ import { buttonClass } from "../lib/buttonStyles";
 
 export default async function SiteHeader() {
   const session = await getServerSession(authOptions);
-  const userId = session?.user ? (session.user as any).id : null;
+  const userId = session?.user?.id ?? null;
 
   // The friends badge clears itself (a request is accepted or declined and it's
   // gone); the events one is deliberately a standing count rather than a
@@ -106,7 +106,7 @@ export default async function SiteHeader() {
               <Avatar
                 image={session.user.image}
                 name={displayName(session.user)}
-                colorKey={(session.user as any).id}
+                colorKey={session.user.id}
                 size={24}
               />
               {session.user.name?.split(" ")[0] ?? "Profile"}

@@ -13,7 +13,7 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Organizers use Cancel/Reschedule instead -- leaving is a non-organizer action only.
-  if (event.creatorId === (session.user as any).id) {
+  if (event.creatorId === session.user.id) {
     return NextResponse.json({ error: "Organizers can't leave their own event -- cancel it instead" }, { status: 403 });
   }
 

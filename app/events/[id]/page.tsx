@@ -23,7 +23,7 @@ export default async function EventPage(
   });
   if (!event) notFound();
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   const isCreator = event.creatorId === userId;
   const myParticipant = event.participants.find((p) => p.email === session.user!.email);
   if (!isCreator && !myParticipant) notFound();

@@ -55,7 +55,7 @@ export async function PATCH(req: NextRequest) {
   // null on purpose, not just omits it.
   const { defaultSearchFilters, ...rest } = parsed.data;
   const user = await prisma.user.update({
-    where: { id: (session.user as any).id },
+    where: { id: session.user.id },
     data: {
       ...rest,
       ...(defaultSearchFilters !== undefined && {
@@ -123,7 +123,7 @@ export async function DELETE() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   const email = session.user.email;
 
   // 1. Cancel what they were running. Sequential rather than Promise.all:

@@ -16,7 +16,7 @@ import DisplayNameBanner from "../../components/DisplayNameBanner";
 export default async function EventsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   const events = await prisma.event.findMany({
     where: { OR: [{ creatorId: userId }, { participants: { some: { email: session.user.email ?? "" } } }] },
     include: {

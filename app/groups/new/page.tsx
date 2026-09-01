@@ -18,7 +18,7 @@ export default async function NewGroupPage() {
 
   // Only here to seed the "Custom search window" picker with the user's own
   // /settings default.
-  const user = await prisma.user.findUnique({ where: { id: (session.user as any).id } });
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
 
   return (
     <main className="mx-auto max-w-lg px-6 py-12">

@@ -23,7 +23,7 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const groups = await prisma.savedGroup.findMany({
-    where: { userId: (session.user as any).id },
+    where: { userId: session.user.id },
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json({ groups });
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const parsed = groupSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   if (!session.user.email) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
 
   // Same write-amplification guard as event creation, and nothing more: a

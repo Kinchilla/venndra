@@ -7,7 +7,7 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   const friendship = await prisma.friendship.findUnique({ where: { id: params.id } });
   if (!friendship) return NextResponse.json({ error: "Not found" }, { status: 404 });

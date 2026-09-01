@@ -28,7 +28,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const group = await getOwnedGroup(params.id, (session.user as any).id);
+  const group = await getOwnedGroup(params.id, session.user.id);
   if (!group) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json({ group });
@@ -39,14 +39,14 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const existing = await getOwnedGroup(params.id, (session.user as any).id);
+  const existing = await getOwnedGroup(params.id, session.user.id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const parsed = groupSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   if (!session.user.email) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
-  const friendError = await validateAllFriends((session.user as any).id, session.user.email, parsed.data.emails);
+  const friendError = await validateAllFriends(session.user.id, session.user.email, parsed.data.emails);
   if (friendError) return NextResponse.json({ error: friendError }, { status: 400 });
 
   // Deliberately does NOT touch any Event already created from this group --
@@ -73,7 +73,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const existing = await getOwnedGroup(params.id, (session.user as any).id);
+  const existing = await getOwnedGroup(params.id, session.user.id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.savedGroup.delete({ where: { id: params.id } });

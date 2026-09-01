@@ -46,7 +46,7 @@ export default async function DisplayNameBanner() {
   // taken at sign-in, so someone who saves a name in Settings would keep
   // seeing this until their session was rebuilt.
   const user = await prisma.user.findUnique({
-    where: { id: (session.user as any).id },
+    where: { id: session.user.id },
     select: { name: true, email: true },
   });
   if (!user || hasDisplayName(user.name)) return null;
