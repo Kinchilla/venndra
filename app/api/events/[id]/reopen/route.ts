@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
-import { deleteGoogleEvent } from "../../../../../lib/calendar/google";
-import { deleteMicrosoftEvent } from "../../../../../lib/calendar/microsoft";
-import { deleteAppleEvent } from "../../../../../lib/calendar/apple";
+import { deleteUpstreamEvent } from "../../../../../lib/upstreamEvents";
 
 export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -30,31 +28,14 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   // everyone's results). This means attendees see a real cancellation now,
   // and a fresh invite once a new time is confirmed -- a deliberate
   // trade-off, not an oversight; see README.
-  if (event.externalEventId && event.writeCalendarSourceId) {
-    const writeSource = await prisma.calendarSource.findUnique({
-      where: { id: event.writeCalendarSourceId },
-      include: { connectedCalendar: true },
-    });
-    try {
-      if (writeSource?.connectedCalendar.provider === "GOOGLE" && writeSource.connectedCalendar.nextAuthAccountId) {
-        await deleteGoogleEvent(writeSource.connectedCalendar.nextAuthAccountId, writeSource.externalId, event.externalEventId);
-      } else if (
-        writeSource?.connectedCalendar.provider === "MICROSOFT" &&
-        writeSource.connectedCalendar.nextAuthAccountId
-      ) {
-        await deleteMicrosoftEvent(writeSource.connectedCalendar.nextAuthAccountId, event.externalEventId);
-      } else if (writeSource?.connectedCalendar.provider === "APPLE_CALDAV" && event.externalEventHref) {
-        await deleteAppleEvent(writeSource.connectedCalendar.id, {
-          href: event.externalEventHref,
-          etag: event.externalEventEtag,
-        });
-      }
-    } catch (err) {
-      // If it was already removed by hand, don't block reopening the
-      // search over it.
-      console.error("Failed to delete upstream calendar event during reschedule:", err);
-    }
-  }
+  //
+  // lib/upstreamEvents, not a fourth hand-written copy of the three-provider
+  // delete. This route had one until #30: the same dispatch, the same guards
+  // (its `externalEventId && writeCalendarSourceId` test is the helper's, with
+  // the CONFIRMED half already covered by the 409 above), and the same
+  // swallow-and-log. Best-effort there as here -- an upstream event deleted by
+  // hand is not a reason to refuse to reopen the search.
+  await deleteUpstreamEvent(event);
 
   // Clear externalEventId/writeCalendarSourceId too -- since the old
   // calendar event is gone, the next confirm should CREATE a fresh one,

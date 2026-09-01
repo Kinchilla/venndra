@@ -12,6 +12,11 @@
  * no attendee list at all), and a bug fixed in one copy is a bug still live
  * in the other.
  *
+ * The reopen route (reschedule) called its own copy of the delete half until
+ * #30 -- the same dispatch, the same guards, written out again -- and now
+ * calls this one. Callers of deleteUpstreamEvent: cancel, reopen, and account
+ * deletion.
+ *
  * Both are best-effort by design, and neither throws. If the upstream event
  * is already gone -- deleted by hand in Google Calendar, or belonging to a
  * calendar whose credentials have since been revoked -- that is not a reason
