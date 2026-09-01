@@ -235,7 +235,7 @@ export default function GroupForm({
           <FiltersBuilder key={filtersVersion} initial={filters} onChange={setFilters} />
         ) : (
           <p className="text-xs text-ink/40">
-            This group won't set any times. Picking it on a new event leaves the search window as you left it.
+            Turn on to create a default search window specific to this group (e.g. Tuesdays at 7pm). Leave off to stick with your profile's default search window.
           </p>
         )}
       </div>
