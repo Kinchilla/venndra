@@ -7,6 +7,7 @@ import { prisma } from "../../../lib/prisma";
 import { validateAllFriends } from "../../../lib/friends";
 import { emailListField } from "../../../lib/emailIdentity";
 import { checkRateLimit } from "../../../lib/rateLimit";
+import { weeklyHoursSchema } from "../../../lib/searchWindowSchema";
 
 const groupSchema = z.object({
   name: z.string().min(1).max(60),
@@ -15,7 +16,7 @@ const groupSchema = z.object({
   // Nullable, not just optional: null is how the client says "this group
   // has no search window", which has to be distinguishable from the field
   // simply being absent.
-  defaultFilters: z.record(z.array(z.tuple([z.string(), z.string()]))).nullable().optional(),
+  defaultFilters: weeklyHoursSchema.nullable().optional(),
 });
 
 export async function GET() {

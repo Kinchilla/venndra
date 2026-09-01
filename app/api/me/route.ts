@@ -8,12 +8,7 @@ import { upcomingConfirmedWhere } from "../../../lib/eventLifecycle";
 import { deleteUpstreamEvent, removeAttendeeFromUpstreamEvent, UpstreamEvent } from "../../../lib/upstreamEvents";
 import { normalizeEmail } from "../../../lib/emailIdentity";
 import { forgetRateLimitSubjects } from "../../../lib/rateLimit";
-
-// Same shape as Event.filters / SavedGroup.defaultFilters -- day-key ->
-// array of [start, end] time-of-day windows. `null` is a meaningful,
-// explicit value here (not just "field omitted") -- it's how the Settings
-// page's "Reset to app default" button clears a previously saved default.
-const weeklyHoursSchema = z.record(z.array(z.tuple([z.string(), z.string()])));
+import { weeklyHoursSchema } from "../../../lib/searchWindowSchema";
 
 const schema = z.object({
   // Trimmed, and an empty result becomes null rather than "".
@@ -37,6 +32,9 @@ const schema = z.object({
     .nullable()
     .optional(),
   timezone: z.string().min(1).optional(),
+  // `null` is a meaningful, explicit value here (not just "field omitted") --
+  // it's how the Settings page's "Reset to app default" button clears a
+  // previously saved default.
   defaultSearchFilters: weeklyHoursSchema.nullable().optional(),
 });
 

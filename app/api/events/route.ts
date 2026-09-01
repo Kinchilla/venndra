@@ -7,6 +7,7 @@ import { prisma } from "../../../lib/prisma";
 import { validateAllFriends, validateNoPausedInvitees } from "../../../lib/friends";
 import { emailListField } from "../../../lib/emailIdentity";
 import { checkRateLimit } from "../../../lib/rateLimit";
+import { weeklyHoursSchema } from "../../../lib/searchWindowSchema";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -19,7 +20,7 @@ const eventSchema = z
     searchStart: dateOnly,
     searchEnd: dateOnly,
     timezone: z.string().min(1),
-    filters: z.record(z.array(z.tuple([z.string(), z.string()]))).default({}),
+    filters: weeklyHoursSchema.default({}),
     minAttendees: z.number().int().min(1).optional(),
     votingEnabled: z.boolean().default(false),
     voteTopX: z.number().int().min(1).max(10).optional(),
