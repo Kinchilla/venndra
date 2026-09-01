@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fromZonedTime } from "date-fns-tz";
-import { buildSlots, type SlotParticipant, type WeeklyHours } from "./availabilitySlots";
+import { buildSlots, searchDays, type SlotParticipant, type WeeklyHours } from "./availabilitySlots";
 import type { BusyInterval } from "./calendar/google";
 
 /**
@@ -327,6 +327,121 @@ describe("the creator's calendar day, east and west of UTC", () => {
       expect(slots[0].start.toISOString(), tz).toBe(
         fromZonedTime("2026-09-03T09:00:00", tz).toISOString()
       );
+    }
+  });
+});
+
+/**
+ * The invariant lib/availability's busy-interval fetch depends on.
+ *
+ * That fetch asks each provider for everything between `now` and a ceiling,
+ * and buildSlots then decides who is free using whatever came back. If the
+ * ceiling lands before the last slot ends, the events in the gap are never
+ * fetched -- and an unfetched event is indistinguishable from no event, so
+ * everybody in that slot is reported FREE.
+ *
+ * The ceiling used to be date-fns' endOfDay applied to searchEnd, which is
+ * server-local: on a UTC server it cut a Denver search four hours short and a
+ * Berlin one twenty. Both halves now come from searchDays, so the property
+ * below is structural rather than a coincidence of offsets -- but it is worth
+ * asserting anyway, because the failure is silent and produces confident wrong
+ * answers rather than an error.
+ */
+describe("the fetch ceiling covers every slot it will be used to judge", () => {
+  // 08:00-22:00 daily is what an unfiltered search defaults to, and the latest
+  // any default search can run.
+  const allDay = {} as WeeklyHours;
+
+  const ZONES = [
+    "Pacific/Niue", // -11, the far west
+    "America/Denver",
+    "America/New_York",
+    "UTC",
+    "Europe/London",
+    "Europe/Berlin",
+    "Asia/Kolkata",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+    "Pacific/Auckland",
+    "Pacific/Kiritimati", // +14, the far east
+  ];
+
+  for (const tz of ZONES) {
+    it(`holds for a creator in ${tz}`, () => {
+      const searchStart = storedDate("2026-09-01", tz);
+      const searchEnd = storedDate("2026-09-03", tz);
+
+      const { endsAt } = searchDays(searchStart, searchEnd, tz);
+      const slots = buildSlots({
+        creatorTimezone: tz,
+        filters: allDay,
+        durationMin: 60,
+        searchStart,
+        searchEnd,
+        participants: [connected("a@x.com")],
+        busyByEmail: new Map(),
+        errorByEmail: new Map(),
+        now: LONG_AGO,
+      });
+
+      expect(slots.length, `${tz} produced no slots`).toBeGreaterThan(0);
+      const lastSlotEnd = Math.max(...slots.map((s) => s.end.getTime()));
+      expect(lastSlotEnd, `${tz}: busy data stops before the last slot ends`).toBeLessThanOrEqual(
+        endsAt.getTime()
+      );
+    });
+  }
+
+  it("covers a search whose last day is a DST transition in the creator's zone", () => {
+    // 1 November 2026: Denver's clocks go back, so that day is 25 hours long.
+    const tz = "America/Denver";
+    const searchStart = storedDate("2026-10-31", tz);
+    const searchEnd = storedDate("2026-11-01", tz);
+
+    const { endsAt } = searchDays(searchStart, searchEnd, tz);
+    const slots = buildSlots({
+      creatorTimezone: tz,
+      filters: allDay,
+      durationMin: 60,
+      searchStart,
+      searchEnd,
+      participants: [connected("a@x.com")],
+      busyByEmail: new Map(),
+      errorByEmail: new Map(),
+      now: LONG_AGO,
+    });
+
+    expect(Math.max(...slots.map((s) => s.end.getTime()))).toBeLessThanOrEqual(endsAt.getTime());
+  });
+});
+
+describe("searchDays", () => {
+  it("returns one day per calendar day the creator chose, inclusive", () => {
+    const tz = "Asia/Tokyo";
+    const { days } = searchDays(storedDate("2026-09-01", tz), storedDate("2026-09-03", tz), tz);
+    expect(days.map((d) => d.toISOString().slice(0, 10))).toEqual([
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+    ]);
+  });
+
+  it("returns the creator's dates, not the server's reading of the instants", () => {
+    // Tokyo's midnight-3-September is 2 September 15:00Z. A day list taken off
+    // the raw instant would start on the 2nd.
+    const tz = "Asia/Tokyo";
+    const { days } = searchDays(storedDate("2026-09-03", tz), storedDate("2026-09-03", tz), tz);
+    expect(days).toHaveLength(1);
+    expect(days[0].toISOString().slice(0, 10)).toBe("2026-09-03");
+  });
+
+  it("puts endsAt after the last day ends everywhere from UTC-12 to UTC+14", () => {
+    for (const tz of ["Pacific/Niue", "UTC", "Pacific/Kiritimati"]) {
+      const { endsAt } = searchDays(storedDate("2026-09-03", tz), storedDate("2026-09-03", tz), tz);
+      // Midnight opening the day AFTER the last search day, in the creator's
+      // own timezone: nothing on the 3rd can run past it.
+      const dayAfterLocalMidnight = storedDate("2026-09-04", tz);
+      expect(endsAt.getTime(), tz).toBeGreaterThanOrEqual(dayAfterLocalMidnight.getTime());
     }
   });
 });

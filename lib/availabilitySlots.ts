@@ -1,4 +1,4 @@
-import { addDays, addMinutes } from "date-fns";
+import { addMinutes } from "date-fns";
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import type { BusyInterval } from "./calendar/google";
 import type { WeeklyHours } from "./searchWindow";
@@ -72,6 +72,65 @@ function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Which calendar days does this search cover, to the person who chose them --
+ * and when is the last of them over?
+ *
+ * searchStart and searchEnd are stored as midnight in the creator's timezone
+ * expressed as UTC instants (app/api/events/route.ts), so the only way back to
+ * the dates they actually picked is through that timezone. Reading the day
+ * straight off the instant is server-local, and quietly works only for
+ * creators at or west of UTC: for anyone east of it the stored instant falls
+ * on the previous UTC date. A creator in Tokyo picking Thursday 3 September
+ * stores 2 September 15:00Z, and a Thursday-only filter then produced no slots
+ * at all. That was #49.
+ *
+ * DECLARED ONCE, AND USED BY BOTH HALVES, which is the point (#30). buildSlots
+ * needs the days; lib/availability needs `endsAt`, to know how far ahead to
+ * ask each provider for busy intervals. Those are one question, and answering
+ * it twice is what went wrong the first time: lib/availability derived its
+ * fetch ceiling with date-fns' endOfDay -- server-local, the same mistake in
+ * the same shape -- so on the last day of a search, busy events past the
+ * server's midnight were never fetched and everybody looked FREE. On a UTC
+ * server that lost the last four hours of a Denver day and twenty of a Berlin
+ * one. #49 fixed the day keys and left this half, because the two were derived
+ * separately. They no longer are.
+ *
+ * Everything below is UTC-anchored on purpose. The labels come from
+ * formatInTimeZone, which reads a real instant through a timezone directly
+ * rather than shifting a Date's local fields to fake it -- that trick is the
+ * usual way to do this and it breaks on the two days a year when the shifted
+ * value lands on a wall-clock time the SERVER's own timezone skips. Each day
+ * is anchored at 12:00Z and stepped by exactly 86,400,000ms, which keeps the
+ * arithmetic away from every DST boundary in both zones, permanently.
+ *
+ * `endsAt` is the noon anchor of the day AFTER the last one. That is a ceiling
+ * rather than an exact end-of-day, and deliberately: UTC offsets run from -12
+ * to +14, so the last day ends somewhere between dayT10:00Z and
+ * (day+1)T12:00Z, and (day+1)T12:00Z covers every one of them without any
+ * local-midnight arithmetic to get wrong. Over-fetching busy intervals past
+ * the last slot is free -- they overlap nothing -- whereas under-fetching by
+ * an hour is the bug this exists to prevent.
+ */
+export function searchDays(
+  searchStart: Date,
+  searchEnd: Date,
+  creatorTimezone: string
+): { days: Date[]; endsAt: Date } {
+  const startLabel = formatInTimeZone(searchStart, creatorTimezone, "yyyy-MM-dd");
+  const endLabel = formatInTimeZone(searchEnd, creatorTimezone, "yyyy-MM-dd");
+  const firstDay = new Date(`${startLabel}T12:00:00Z`);
+  const lastDay = new Date(`${endLabel}T12:00:00Z`);
+
+  const totalDays = Math.max(0, Math.round((lastDay.getTime() - firstDay.getTime()) / MS_PER_DAY) + 1);
+  const days: Date[] = [];
+  for (let i = 0; i < totalDays; i++) days.push(new Date(firstDay.getTime() + i * MS_PER_DAY));
+
+  return { days, endsAt: new Date(lastDay.getTime() + MS_PER_DAY) };
+}
+
 /**
  * Candidate meeting slots, with each participant's status in each.
  *
@@ -118,34 +177,12 @@ export function buildSlots(params: {
   const slots: Slot[] = [];
   const stepMin = 30; // slot granularity, independent of meeting duration
 
-  // Which calendar day is this, to the person who picked it?
-  //
-  // searchStart is stored as midnight in the creator's timezone expressed as a
-  // UTC instant (app/api/events/route.ts), so the only way back to the date
-  // they actually chose is through that timezone. This used to read the day
-  // straight off the instant with startOfDay/getDay, which are server-local,
-  // and that quietly worked only for creators at or west of UTC. For anyone
-  // east of it the stored instant falls on the previous UTC date: a creator in
-  // Tokyo picking Thursday 3 September stores 2 September 15:00Z, the day key
-  // came out "wed", and a Thursday-only filter produced no slots at all.
-  //
-  // Everything below is deliberately UTC-anchored. The labels come from
-  // formatInTimeZone, which reads a real instant through a timezone without
-  // going via a Date whose local fields have been shifted to fake it -- that
-  // trick is the usual way to do this and it breaks on the two days a year
-  // when the shifted value lands on a time the SERVER's own timezone skips.
-  // Anchoring each day at 12:00Z and stepping in UTC keeps the arithmetic away
-  // from every DST boundary, in both timezones, permanently.
-  const startLabel = formatInTimeZone(searchStart, creatorTimezone, "yyyy-MM-dd");
-  const endLabel = formatInTimeZone(searchEnd, creatorTimezone, "yyyy-MM-dd");
-  const firstDay = new Date(`${startLabel}T12:00:00Z`);
-  const lastDay = new Date(`${endLabel}T12:00:00Z`);
+  // Which calendar days this covers, to the person who picked them. Derived by
+  // searchDays above, not here, so the busy-interval fetch in lib/availability
+  // cannot disagree with the slots this produces -- see the note there.
+  const { days } = searchDays(searchStart, searchEnd, creatorTimezone);
 
-  const MS_PER_DAY = 86_400_000;
-  const totalDays = Math.max(0, Math.round((lastDay.getTime() - firstDay.getTime()) / MS_PER_DAY) + 1);
-
-  for (let dayOffset = 0; dayOffset < totalDays; dayOffset++) {
-    const day = addDays(firstDay, dayOffset);
+  for (const day of days) {
     // getUTCDay, not getDay: `day` is a noon-UTC anchor standing for a date in
     // the creator's timezone, so its UTC fields are the ones that mean
     // anything. getDay would put the server back into the answer.

@@ -1,10 +1,9 @@
-import { endOfDay } from "date-fns";
 import { prisma } from "./prisma";
 import { getGoogleBusyIntervals } from "./calendar/google";
 import { getMicrosoftBusyIntervals } from "./calendar/microsoft";
 import { getAppleBusyIntervals } from "./calendar/apple";
 import type { BusyInterval } from "./calendar/google";
-import { buildSlots, type Slot, type WeeklyHours, type SlotParticipant } from "./availabilitySlots";
+import { buildSlots, searchDays, type Slot, type WeeklyHours, type SlotParticipant } from "./availabilitySlots";
 
 /**
  * The imperative shell around lib/availabilitySlots.
@@ -75,11 +74,25 @@ export async function computeGroupAvailability(params: {
   searchEnd: Date;
   participants: SlotParticipant[];
 }): Promise<Slot[]> {
-  const { participants, searchEnd } = params;
+  const { participants, creatorTimezone, searchStart, searchEnd } = params;
 
   const now = new Date();
   const windowStart = now;
-  const windowEnd = endOfDay(searchEnd);
+
+  // How far ahead to ask each provider for busy intervals: past the end of the
+  // last day the search covers, IN THE CREATOR'S TIMEZONE. Comes from
+  // searchDays, the same function buildSlots gets its days from, so the
+  // fetched window is guaranteed to contain every slot that will be built out
+  // of it.
+  //
+  // This was `endOfDay(searchEnd)` until #30. searchEnd is midnight in the
+  // creator's timezone stored as a UTC instant, and endOfDay is server-local,
+  // so one decision was being made with two clocks -- #49's mistake, in #49's
+  // own file, in the half #49 didn't touch. On a UTC server it stopped
+  // fetching four hours before a Denver creator's last slot and twenty before
+  // a Berlin one, and a busy participant inside that gap came back FREE with
+  // nothing to say otherwise.
+  const { endsAt: windowEnd } = searchDays(searchStart, searchEnd, creatorTimezone);
 
   const connected = participants.filter((p) => p.status === "CONNECTED" && p.userId);
 
