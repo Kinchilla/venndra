@@ -526,6 +526,12 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
       // await resolving and router.push completing (which briefly looked
       // like the search had failed).
       setSubmitting(false);
+      // Not lib/apiError's apiErrorMessage, deliberately: this is the one
+      // failure path that reads something other than `error` off the body.
+      // `code` distinguishes the not-friends 400 so the message below can be
+      // reworded for editing, and a Response body can only be read once, so
+      // the helper (which consumes it) can't also run here. The last two
+      // branches are its logic, inline.
       const body = await res.json().catch(() => null);
       if (body?.code === "not-friends" && searchParams.get("fromEvent")) {
         // The server's own message says "invite," which reads oddly here --

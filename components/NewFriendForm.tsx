@@ -5,6 +5,7 @@ import BackButton from "./BackButton";
 import SessionEndedNotice from "./SessionEndedNotice";
 import SuggestedFriendsSection from "./SuggestedFriendsSection";
 import { buttonClass } from "../lib/buttonStyles";
+import { apiErrorMessage } from "../lib/apiError";
 
 /**
  * Also the 404 text from POST /api/friends -- the inline check below and that
@@ -83,12 +84,10 @@ export default function NewFriendForm() {
         setSessionEnded(true);
         return;
       }
-      // .catch, because an unhandled 500 comes back as HTML and res.json()
-      // rejects on it. Without this the whole handler died right here: no
-      // message set, button re-enabled, so pressing Send appeared to do
-      // nothing at all. Same guard SuggestedFriendChip uses.
-      const body = await res.json().catch(() => null);
-      setError(typeof body?.error === "string" ? body.error : "Couldn't send that request.");
+      // lib/apiError carries the .catch and the typeof guard, and the note
+      // on why both are load-bearing -- this handler is where the missing
+      // .catch was first found.
+      setError(await apiErrorMessage(res, "Couldn't send that request."));
       return;
     }
     setSuccess(true);

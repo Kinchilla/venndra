@@ -5,6 +5,7 @@ import Button from "./Button";
 import ConnectAppleForm from "./ConnectAppleForm";
 import ConnectProviderButton from "./ConnectProviderButton";
 import { CALENDARS_CHANGED_EVENT, dispatchCalendarsChanged } from "../lib/calendarEvents";
+import { apiErrorMessage } from "../lib/apiError";
 
 type Account = {
   id: string;
@@ -83,11 +84,10 @@ export default function ConnectedAccountsSection() {
     setError(null);
 
     const res = await fetch(`/api/calendars/accounts/${id}`, { method: "DELETE" });
-    const body = await res.json().catch(() => ({}));
 
     if (!res.ok) {
       setPendingId(null);
-      setError(body.error ?? "Couldn't disconnect that account. Try again.");
+      setError(await apiErrorMessage(res, "Couldn't disconnect that account. Try again."));
       // Re-read regardless: a stale confirmedEventCount is the most likely
       // reason a disconnect the UI thought was allowed got rejected.
       load();

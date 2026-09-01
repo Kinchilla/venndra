@@ -7,6 +7,7 @@ import { useClientValue } from "../hooks/useClientValue";
 import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
 import { displayName } from "../lib/displayName";
+import { apiErrorMessage } from "../lib/apiError";
 
 type Participant = {
   email: string;
@@ -135,8 +136,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
       commit(() => router.refresh());
     } else {
       release();
-      const body = await res.json().catch(() => null);
-      setActionError(typeof body?.error === "string" ? body.error : "Couldn't cancel this event.");
+      setActionError(await apiErrorMessage(res, "Couldn't cancel this event."));
     }
   }
 
@@ -159,8 +159,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
     commit(() => router.refresh());
   } else {
     release();
-    const body = await res.json().catch(() => null);
-    setActionError(typeof body?.error === "string" ? body.error : "Couldn't leave this event.");
+    setActionError(await apiErrorMessage(res, "Couldn't leave this event."));
   }
 }
 
@@ -210,8 +209,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
       return;
     }
     release();
-    const body = await res.json().catch(() => null);
-    setPickerError(typeof body?.error === "string" ? body.error : "Couldn't transfer the organizer role.");
+    setPickerError(await apiErrorMessage(res, "Couldn't transfer the organizer role."));
     // Eligibility may have changed since the list was fetched (e.g. they
     // disconnected their write-target calendar in another tab) -- refresh
     // rather than leaving a stale eligible-looking row in place.
@@ -236,8 +234,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
       commit(() => router.refresh());
     } else {
       release();
-      const body = await res.json().catch(() => null);
-      setActionError(typeof body?.error === "string" ? body.error : "Couldn't reschedule this event.");
+      setActionError(await apiErrorMessage(res, "Couldn't reschedule this event."));
     }
   }
 
@@ -250,8 +247,7 @@ export default function EventChip({ event }: { event: EventChipData }) {
       commit(() => router.refresh());
     } else {
       release();
-      const body = await res.json().catch(() => null);
-      setActionError(typeof body?.error === "string" ? body.error : "Couldn't delete this event.");
+      setActionError(await apiErrorMessage(res, "Couldn't delete this event."));
     }
   }
 

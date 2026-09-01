@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePendingAction } from "../hooks/usePendingAction";
 import { buttonClass } from "../lib/buttonStyles";
+import { apiErrorMessage } from "../lib/apiError";
 import Avatar from "./Avatar";
 import SessionEndedNotice from "./SessionEndedNotice";
 
@@ -55,8 +56,7 @@ export default function SuggestedFriendChip({ user, onGone }: { user: SuggestedU
       setSessionEnded("send this request");
       return;
     }
-    const body = await res.json().catch(() => null);
-    setError(typeof body?.error === "string" ? body.error : "Couldn't send that request.");
+    setError(await apiErrorMessage(res, "Couldn't send that request."));
   }
 
   async function handleDismiss() {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { buttonClass } from "../lib/buttonStyles";
+import { apiErrorMessage } from "../lib/apiError";
 import Button from "./Button";
 import { COUNTRIES, DEFAULT_COUNTRY, findCountry, flagEmoji, formatNational, nationalDigits, parsePhone } from "../lib/phone";
 
@@ -101,13 +102,17 @@ export default function PhoneField({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone: input, country }),
     });
-    const body = await res.json().catch(() => ({}));
     setBusy(false);
 
     if (!res.ok) {
-      setError(typeof body.error === "string" ? body.error : "Couldn't save that number.");
+      setError(await apiErrorMessage(res, "Couldn't save that number."));
       return;
     }
+
+    // Read only on the success path now that lib/apiError owns the failure
+    // one. Same catch-to-{} as before, for the same reason: a 200 with an
+    // unreadable body should leave `verified`/`sent` falsy, not throw.
+    const body = await res.json().catch(() => ({}) as { verified?: boolean; sent?: boolean });
 
     // The edits become the committed value only now that the server took them.
     setSaved({ verified: !!body.verified, input, country });
@@ -122,11 +127,10 @@ export default function PhoneField({
     setNotice(null);
 
     const res = await fetch("/api/me/phone", { method: "PUT" });
-    const body = await res.json().catch(() => ({}));
     setBusy(false);
 
     if (!res.ok) {
-      setError(typeof body.error === "string" ? body.error : "Couldn't send another text.");
+      setError(await apiErrorMessage(res, "Couldn't send another text."));
       return;
     }
     setNotice("Sent — check your texts.");

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
 import { buttonClass } from "../lib/buttonStyles";
 import { displayName } from "../lib/displayName";
+import { apiErrorMessage } from "../lib/apiError";
 import type { ParticipantAvailability } from "../lib/availabilitySlots";
 
 // ParticipantAvailability is imported, not redeclared (#30). The availability
@@ -193,8 +194,7 @@ export default function EventResults({
 
     if (!res.ok) {
       setVoteState(voteState); // revert
-      const body = await res.json().catch(() => null);
-      setVoteError(typeof body?.error === "string" ? body.error : "Couldn't save that vote.");
+      setVoteError(await apiErrorMessage(res, "Couldn't save that vote."));
       return;
     }
     refreshVotes(); // tally changed too, not just my own picks
@@ -262,8 +262,7 @@ export default function EventResults({
     });
     setConfirming(false);
     if (!res.ok) {
-      const body = await res.json();
-      setError(typeof body.error === "string" ? body.error : "Couldn't confirm that slot.");
+      setError(await apiErrorMessage(res, "Couldn't confirm that slot."));
       return;
     }
     setJustConfirmed(slot);

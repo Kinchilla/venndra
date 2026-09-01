@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiErrorMessage } from "../lib/apiError";
 import Link from "next/link";
 import { buttonClass } from "../lib/buttonStyles";
 
@@ -26,8 +27,7 @@ export default function PhoneVerifyButton({ token }: { token: string }) {
     });
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(typeof body.error === "string" ? body.error : "Couldn't confirm that number.");
+      setError(await apiErrorMessage(res, "Couldn't confirm that number."));
       setState("idle");
       return;
     }

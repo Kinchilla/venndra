@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { buttonClass } from "../lib/buttonStyles";
+import { apiErrorMessage } from "../lib/apiError";
 
 /**
  * The footer's feedback form.
@@ -259,11 +260,10 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
         screenshot: shot ? shot.slice(shot.indexOf(",") + 1) : null,
       }),
     });
-    const body = await res.json().catch(() => ({}));
     setBusy(false);
 
     if (!res.ok) {
-      setError(typeof body.error === "string" ? body.error : "Couldn't send that. Try again in a moment.");
+      setError(await apiErrorMessage(res, "Couldn't send that. Try again in a moment."));
       return;
     }
     setSent(true);
