@@ -1,23 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { z } from "zod";
 import { authOptions } from "../../../lib/auth";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { validateAllFriends } from "../../../lib/friends";
-import { emailListField } from "../../../lib/emailIdentity";
 import { checkRateLimit } from "../../../lib/rateLimit";
-import { weeklyHoursSchema } from "../../../lib/searchWindowSchema";
-
-const groupSchema = z.object({
-  name: z.string().min(1).max(60),
-  // Normalised and de-duplicated -- see lib/emailIdentity.
-  emails: emailListField,
-  // Nullable, not just optional: null is how the client says "this group
-  // has no search window", which has to be distinguishable from the field
-  // simply being absent.
-  defaultFilters: weeklyHoursSchema.nullable().optional(),
-});
+import { savedGroupSchema } from "../../../lib/savedGroupSchema";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -34,7 +22,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = groupSchema.safeParse(await req.json());
+  const parsed = savedGroupSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const userId = session.user.id;
