@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { fetchJson } from "../lib/apiError";
 import Link from "next/link";
 import Avatar from "./Avatar";
 import { displayName } from "../lib/displayName";
@@ -35,9 +36,13 @@ export default function FriendPicker({
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/friends")
-      .then((r) => r.json())
-      .then((d) => setFriends((d.friends ?? []).map((f: any) => f.user)));
+    fetchJson<{ friends?: { user: Friend }[] }>("/api/friends")
+      .then((d) => setFriends((d.friends ?? []).map((f) => f.user)))
+      // Same reasoning as ConnectedAccountsSection: a dropped request, or a
+      // session that ended, must not become an unhandled rejection. Nothing to
+      // show here -- the picker renders an empty friend list and still takes
+      // typed email addresses.
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

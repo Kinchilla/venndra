@@ -7,7 +7,7 @@ import { useTimeFormat } from "../hooks/useTimeFormat";
 import { formatDate, formatTime, type TimeFormat } from "../lib/timeFormat";
 import { buttonClass } from "../lib/buttonStyles";
 import { displayName } from "../lib/displayName";
-import { apiErrorMessage } from "../lib/apiError";
+import { apiErrorMessage, fetchJson } from "../lib/apiError";
 import type { ParticipantAvailability } from "../lib/availabilitySlots";
 
 // ParticipantAvailability is imported, not redeclared (#30). The availability
@@ -115,15 +115,23 @@ export default function EventResults({
   useEffect(() => {
     if (status !== "SEARCHING") return;
     setLoading(true);
-    fetch(`/api/events/${eventId}/availability`)
-      .then((r) => r.json())
+    fetchJson<{ slots: Slot[]; minAttendees: number | null; totalParticipants: number }>(
+      `/api/events/${eventId}/availability`
+    )
       .then(setData)
+      // The finally below already clears the spinner on failure; this is only
+      // here so a dropped request isn't an unhandled rejection.
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [eventId, status]);
 
   function refreshVotes() {
-    fetch(`/api/events/${eventId}/votes`)
-      .then((r) => r.json())
+    fetchJson<{
+      tally?: { slotStart: string; voteCount: number; score: number; voters?: TallyEntry["voters"] }[];
+      voteTopX?: number;
+      canVote?: boolean;
+      myVotes?: { slotStart: string; rank: number }[];
+    }>(`/api/events/${eventId}/votes`)
       .then((d) => {
         const map = new Map<string, TallyEntry>();
         for (const t of d.tally ?? []) map.set(t.slotStart, { voteCount: t.voteCount, score: t.score, voters: t.voters ?? [] });
@@ -136,7 +144,9 @@ export default function EventResults({
             .sort((a: any, b: any) => a.rank - b.rank)
             .map((v: any) => v.slotStart),
         });
-      });
+      })
+      // Leaves the last known tally on screen rather than blanking it.
+      .catch(() => {});
   }
 
   useEffect(() => {

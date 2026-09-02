@@ -5,7 +5,8 @@ import Button from "./Button";
 import ConnectAppleForm from "./ConnectAppleForm";
 import ConnectProviderButton from "./ConnectProviderButton";
 import { CALENDARS_CHANGED_EVENT, dispatchCalendarsChanged } from "../lib/calendarEvents";
-import { apiErrorMessage } from "../lib/apiError";
+import SessionEndedNotice from "./SessionEndedNotice";
+import { ApiError, apiErrorMessage, fetchJson } from "../lib/apiError";
 
 type Account = {
   id: string;
@@ -65,11 +66,30 @@ export default function ConnectedAccountsSection() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error`, which belongs to the disconnect action. A failed
+  // LOAD has to be distinguishable from a failed disconnect, because it also
+  // decides whether the list below is still waiting on something.
+  const [loadError, setLoadError] = useState<"session" | "failed" | null>(null);
 
   const load = useCallback(() => {
-    fetch("/api/calendars/accounts")
-      .then((r) => r.json())
-      .then((d) => setAccounts(d.accounts ?? []));
+    fetchJson<{ accounts?: Account[] }>("/api/calendars/accounts")
+      // Cleared on success rather than at the top of this function: a reload
+      // triggered by CALENDARS_CHANGED_EVENT should leave the previous notice
+      // up while it is in flight, not blank it and re-raise it a moment later.
+      .then((d) => {
+        setAccounts(d.accounts ?? []);
+        setLoadError(null);
+      })
+      // Before this catch existed, a fetch that never completed -- a dropped
+      // connection, or iOS killing in-flight requests when the tab is
+      // backgrounded -- rejected with nobody to handle it, which is a reported
+      // crash (Sentry, 2026-09-01, as Safari's "TypeError: Load failed") and
+      // left the placeholder below saying "Loading accounts..." forever.
+      //
+      // 401 is split out because it is the one case with a next step: the page
+      // guards on a session, so it means the session ended underneath this
+      // tab, and the notice offers a sign-in link rather than a sentence.
+      .catch((err) => setLoadError(err instanceof ApiError && err.status === 401 ? "session" : "failed"));
   }, []);
 
   useEffect(() => {
@@ -120,13 +140,26 @@ export default function ConnectedAccountsSection() {
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
 
+      {loadError === "session" && (
+        <SessionEndedNotice action="load your connected accounts" className="mb-3 text-sm text-red-600" />
+      )}
+
+      {loadError === "failed" && (
+        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          Couldn&apos;t load your connected accounts. Reload the page to try again.
+        </p>
+      )}
+
       {/* The connect buttons below render in every state, so the two
           placeholders stay placeholders -- someone with nothing connected yet
           reads "No accounts connected yet" and has the fix directly under it,
           rather than an early return that hides the only useful control on the
           section. */}
       {!accounts ? (
-        <p className="text-sm text-ink/50">Loading accounts…</p>
+        // Only while something is actually in flight. Once a load has failed
+        // there is nothing left to wait for, and one of the two notices above
+        // is already saying so.
+        loadError === null && <p className="text-sm text-ink/50">Loading accounts…</p>
       ) : accounts.length === 0 ? (
         <p className="text-sm text-ink/50">No accounts connected yet.</p>
       ) : (

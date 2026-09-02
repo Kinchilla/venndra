@@ -13,6 +13,7 @@ import type { WeeklyHours } from "../lib/searchWindow";
 import BackButton from "./BackButton";
 import { useClientValue } from "../hooks/useClientValue";
 import { buttonClass } from "../lib/buttonStyles";
+import { fetchJson } from "../lib/apiError";
 import { stashGroupPrefill } from "../lib/groupPrefill";
 import {
   clearEventDraftRestoreFlag,
@@ -241,9 +242,11 @@ export default function NewEventForm({ initialDefaultFilters }: { initialDefault
   }
 
   useEffect(() => {
-    fetch("/api/groups")
-      .then((r) => r.json())
-      .then((d) => setGroups(d.groups ?? []));
+    fetchJson<{ groups?: SavedGroup[] }>("/api/groups")
+      .then((d) => setGroups(d.groups ?? []))
+      // Groups stay empty, which the form already renders sensibly; the catch
+      // is what keeps a dropped request from being an unhandled rejection.
+      .catch(() => {});
   }, []);
 
   // Fills in "today" / "today + 1 month" as the default search window,
