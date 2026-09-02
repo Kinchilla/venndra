@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "../../../../../lib/auth";
 import { redeemPhoneToken } from "../../../../../lib/phoneVerification";
 import { jsonBody } from "../../../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../../../lib/session";
 
 /**
  * Redeem a verification token.
@@ -20,13 +19,13 @@ import { jsonBody } from "../../../../../lib/requestBody";
  * a page with a button; only pressing it reaches here.
  */
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const parsed = z.object({ token: z.string().min(1).max(64) }).safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: "That link is missing its code." }, { status: 400 });
 
-  const result = await redeemPhoneToken(parsed.data.token, session.user.id);
+  const result = await redeemPhoneToken(parsed.data.token, sessionUser.id);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 
   return NextResponse.json({ ok: true, phone: result.phone });

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
+import { currentUser, unauthorized } from "../../../../lib/session";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const event = await prisma.event.findUnique({
     where: { id: params.id },
@@ -14,9 +13,9 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
   });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
   const isInvolved =
-    event.creatorId === userId || event.participants.some((p) => p.email === session.user!.email);
+    event.creatorId === userId || event.participants.some((p) => p.email === sessionUser.email);
   if (!isInvolved) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json({ event });
@@ -24,13 +23,13 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
 
 export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
   if (event.creatorId !== userId) {
     return NextResponse.json({ error: "Only the event creator can delete this" }, { status: 403 });
   }

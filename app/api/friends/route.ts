@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { emailField } from "../../../lib/emailIdentity";
 import { checkRateLimit } from "../../../lib/rateLimit";
 import { jsonBody } from "../../../lib/requestBody";
 import { loadFriendLists } from "../../../lib/friends";
+import { currentUser, unauthorized } from "../../../lib/session";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   // Shared with app/friends/page.tsx, which renders the same three lists
   // server-side (#30). The response shape is unchanged: same keys, same
   // `friendshipId`, same user fields, same order.
-  return NextResponse.json(await loadFriendLists(session.user.id));
+  return NextResponse.json(await loadFriendLists(sessionUser.id));
 }
 
 // Two ways to name the person you're adding, and the difference is issue #6.
@@ -43,9 +42,9 @@ const requestSchema = z.union([
 ]);
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
+  const userId = sessionUser.id;
 
   // Limited because of who bears the cost, not what it costs us. Every one of
   // these puts something in front of another person, and declining a request

@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { encrypt } from "../../../../lib/crypto";
 import { syncParticipantStatusForUser } from "../../../../lib/participants";
 import { populateCalendarSources } from "../../../../lib/calendarSources";
 import { emailField } from "../../../../lib/emailIdentity";
 import { jsonBody } from "../../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../../lib/session";
 
 const appleSchema = z.object({
   // The iCloud email, used as the CalDAV username. Normalised (lib/emailIdentity)
@@ -23,14 +22,14 @@ const appleSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const parsed = appleSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const { appleId, appSpecificPassword, label } = parsed.data;
-  const userId = session.user.id;
+  const userId = sessionUser.id;
 
   // Re-adding an iCloud account that's already here -- most likely one
   // disconnected earlier, or one whose app-specific password was revoked at
@@ -56,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   await populateCalendarSources(connected.id);
 
-  if (session.user.email) await syncParticipantStatusForUser(userId, session.user.email);
+  if (sessionUser.email) await syncParticipantStatusForUser(userId, sessionUser.email);
 
   return NextResponse.json({ connectedCalendar: { id: connected.id, label: connected.label } }, { status: 201 });
 }

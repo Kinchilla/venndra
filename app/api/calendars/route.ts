@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { populateCalendarSources } from "../../../lib/calendarSources";
+import { currentUser, unauthorized } from "../../../lib/session";
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
 
   // Re-sync each connected account's calendar list on the way in, so a
   // calendar created (or deleted) upstream since the last visit just shows

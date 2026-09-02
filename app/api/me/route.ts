@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
-import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { upcomingConfirmedWhere } from "../../../lib/eventLifecycle";
 import { deleteUpstreamEvent, removeAttendeeFromUpstreamEvent, UpstreamEvent } from "../../../lib/upstreamEvents";
@@ -10,6 +8,7 @@ import { normalizeEmail } from "../../../lib/emailIdentity";
 import { forgetRateLimitSubjects } from "../../../lib/rateLimit";
 import { weeklyHoursSchema } from "../../../lib/searchWindowSchema";
 import { jsonBody } from "../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../lib/session";
 
 const schema = z.object({
   // Trimmed, and an empty result becomes null rather than "".
@@ -40,8 +39,8 @@ const schema = z.object({
 });
 
 export async function PATCH(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const parsed = schema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -54,7 +53,7 @@ export async function PATCH(req: NextRequest) {
   // null on purpose, not just omits it.
   const { defaultSearchFilters, ...rest } = parsed.data;
   const user = await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: sessionUser.id },
     data: {
       ...rest,
       ...(defaultSearchFilters !== undefined && {
@@ -119,11 +118,11 @@ const UPSTREAM_EVENT_SELECT = {
  * magic-link limiter means a row whose key IS the address being erased.
  */
 export async function DELETE() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const userId = session.user.id;
-  const email = session.user.email;
+  const userId = sessionUser.id;
+  const email = sessionUser.email;
 
   // 1. Cancel what they were running. Sequential rather than Promise.all:
   // several of these can share one connected calendar, and hammering a

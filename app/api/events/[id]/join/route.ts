@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { checkRateLimit } from "../../../../../lib/rateLimit";
+import { currentUser, unauthorized } from "../../../../../lib/session";
 
 export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser?.email) return unauthorized();
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
 
   const allowed = await checkRateLimit("join", userId, 10);
   if (!allowed) {
@@ -17,7 +16,7 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   }
 
   const participant = await prisma.eventParticipant.findUnique({
-    where: { eventId_email: { eventId: params.id, email: session.user.email } },
+    where: { eventId_email: { eventId: params.id, email: sessionUser.email } },
   });
   if (!participant) {
     return NextResponse.json({ error: "You weren't invited to this event" }, { status: 404 });

@@ -1,6 +1,4 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import { connectErrorMessage } from "../../lib/authErrors";
 import { hasUsableCalendar } from "../../lib/onboarding";
@@ -14,6 +12,7 @@ import CalendarSourcesPanel from "../../components/CalendarSourcesPanel";
 import ConnectedAccountsSection from "../../components/ConnectedAccountsSection";
 import LogoutButton from "../../components/LogoutButton";
 import AccountManagement from "../../components/AccountManagement";
+import { currentUser } from "../../lib/session";
 
 export default async function SettingsPage(
   props: {
@@ -21,10 +20,10 @@ export default async function SettingsPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/login?callbackUrl=/settings");
+  const sessionUser = await currentUser();
+  if (!sessionUser) redirect("/login?callbackUrl=/settings");
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) redirect("/login");
 

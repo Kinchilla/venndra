@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { upcomingConfirmedWhere } from "../../../../../lib/eventLifecycle";
+import { currentUser, unauthorized } from "../../../../../lib/session";
 
 /**
  * Disconnect a connected calendar: the ConnectedCalendar row and its
@@ -47,10 +46,10 @@ import { upcomingConfirmedWhere } from "../../../../../lib/eventLifecycle";
  */
 export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
 
   const calendar = await prisma.connectedCalendar.findUnique({
     where: { id: params.id },

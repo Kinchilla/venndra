@@ -1,16 +1,15 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { hasUsableCalendar } from "../../../lib/onboarding";
 import NewEventForm from "../../../components/NewEventForm";
 import { asWeeklyHours } from "../../../lib/searchWindow";
+import { currentUser } from "../../../lib/session";
 
 export default async function NewEventPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/login?callbackUrl=/events/new");
+  const sessionUser = await currentUser();
+  if (!sessionUser) redirect("/login?callbackUrl=/events/new");
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) redirect("/login");
 

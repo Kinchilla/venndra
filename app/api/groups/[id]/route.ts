@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../lib/auth";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../../lib/prisma";
 import { validateAllFriends } from "../../../../lib/friends";
 import { savedGroupSchema } from "../../../../lib/savedGroupSchema";
 import { jsonBody } from "../../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../../lib/session";
 
 async function getOwnedGroup(id: string, userId: string) {
   const group = await prisma.savedGroup.findUnique({ where: { id } });
@@ -15,10 +14,10 @@ async function getOwnedGroup(id: string, userId: string) {
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const group = await getOwnedGroup(params.id, session.user.id);
+  const group = await getOwnedGroup(params.id, sessionUser.id);
   if (!group) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json({ group });
@@ -26,17 +25,17 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
 
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const existing = await getOwnedGroup(params.id, session.user.id);
+  const existing = await getOwnedGroup(params.id, sessionUser.id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const parsed = savedGroupSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  if (!session.user.email) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
-  const friendError = await validateAllFriends(session.user.id, session.user.email, parsed.data.emails);
+  if (!sessionUser.email) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
+  const friendError = await validateAllFriends(sessionUser.id, sessionUser.email, parsed.data.emails);
   if (friendError) return NextResponse.json({ error: friendError }, { status: 400 });
 
   // Deliberately does NOT touch any Event already created from this group --
@@ -60,10 +59,10 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
 
 export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const existing = await getOwnedGroup(params.id, session.user.id);
+  const existing = await getOwnedGroup(params.id, sessionUser.id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.savedGroup.delete({ where: { id: params.id } });

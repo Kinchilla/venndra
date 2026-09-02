@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "../../../lib/auth";
 import { rateLimitSubject, submitFeedback } from "../../../lib/feedback";
 import { jsonBody } from "../../../lib/requestBody";
+import { currentUser } from "../../../lib/session";
 
 /**
  * Feature ideas and bug reports from the footer form.
@@ -52,8 +51,8 @@ export async function POST(req: NextRequest) {
   // and there is no user on the other end of this to mislead.
   if (parsed.data.website) return NextResponse.json({ ok: true });
 
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id ?? null;
+  const sessionUser = await currentUser();
+  const userId = sessionUser?.id ?? null;
 
   const result = await submitFeedback(
     {
@@ -65,7 +64,7 @@ export async function POST(req: NextRequest) {
     },
     {
       userId,
-      userEmail: session?.user?.email ?? null,
+      userEmail: sessionUser?.email ?? null,
       subject: rateLimitSubject(userId, req.headers.get("x-forwarded-for")),
     }
   );

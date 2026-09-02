@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { jsonBody } from "../../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../../lib/session";
 
 const schema = z.object({ paused: z.boolean() });
 
@@ -18,8 +17,8 @@ const schema = z.object({ paused: z.boolean() });
  * instead of a toggle that lands wherever the race leaves it.
  */
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const parsed = schema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -28,7 +27,7 @@ export async function POST(req: NextRequest) {
   // unpause/repause -- "paused since" means since this pause, not since the
   // first one they ever did.
   const user = await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: sessionUser.id },
     data: { pausedAt: parsed.data.paused ? new Date() : null },
     select: { pausedAt: true },
   });

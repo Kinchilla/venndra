@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import { hasDisplayName } from "../lib/displayName";
 import { buttonClass } from "../lib/buttonStyles";
+import { currentUser } from "../lib/session";
 
 /**
  * Shown to a signed-in user with no display name. Renders nothing at all
@@ -39,14 +38,19 @@ import { buttonClass } from "../lib/buttonStyles";
  * meaningfully different from not having told them.
  */
 export default async function DisplayNameBanner() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return null;
+  const sessionUser = await currentUser();
+  if (!sessionUser) return null;
 
-  // Read from the database rather than the session: the session is a snapshot
-  // taken at sign-in, so someone who saves a name in Settings would keep
-  // seeing this until their session was rebuilt.
+  // Reads the User row rather than sessionUser, and needs `email` as well as
+  // `name`, so it would need a query regardless.
+  //
+  // The reason this used to give was that "the session is a snapshot taken at
+  // sign-in". That is not true here: lib/auth uses strategy "database", so
+  // NextAuth reloads the user row on every request and sessionUser.name would
+  // in fact be current. Corrected rather than deleted, because the false
+  // version is the sort of thing that gets copied into the next component.
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: sessionUser.id },
     select: { name: true, email: true },
   });
   if (!user || hasDisplayName(user.name)) return null;

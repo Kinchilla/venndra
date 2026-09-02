@@ -1,7 +1,5 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import { buttonClass } from "../../lib/buttonStyles";
 import { asWeeklyHours } from "../../lib/searchWindow";
@@ -10,11 +8,12 @@ import GroupChip from "../../components/GroupChip";
 import Paginated from "../../components/Paginated";
 import ConnectCalendarBanner from "../../components/ConnectCalendarBanner";
 import DisplayNameBanner from "../../components/DisplayNameBanner";
+import { currentUser } from "../../lib/session";
 
 export default async function GroupsPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/login");
-  const userId = session.user.id;
+  const sessionUser = await currentUser();
+  if (!sessionUser) redirect("/login");
+  const userId = sessionUser.id;
 
   const groups = await prisma.savedGroup.findMany({
     where: { userId },

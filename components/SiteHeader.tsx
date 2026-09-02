@@ -1,29 +1,33 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import Avatar from "./Avatar";
 import { displayName } from "../lib/displayName";
 import Logo from "./Logo";
 import CountBadge from "./CountBadge";
 import { buttonClass } from "../lib/buttonStyles";
+import { currentUser } from "../lib/session";
 
 export default async function SiteHeader() {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id ?? null;
+  const sessionUser = await currentUser();
 
   // The friends badge clears itself (a request is accepted or declined and it's
   // gone); the events one is deliberately a standing count rather than a
   // "since you last looked" unread, so it keeps nagging until every search
   // either locks in a time or is cancelled. It's the same set as the "Still
   // deciding" section on /events, so the number always has somewhere to land.
-  const [incomingCount, searchingCount] = userId
+  //
+  // Branches on sessionUser itself. It used to derive a `userId` first, test
+  // that, and then reach for `session!.user!.email` inside the branch -- two
+  // assertions standing in for a fact that was true but no longer provable
+  // once the condition had been rewritten in terms of a derived value. Testing
+  // the thing you are about to read costs nothing and needs no assertions.
+  const [incomingCount, searchingCount] = sessionUser
     ? await Promise.all([
-        prisma.friendship.count({ where: { addresseeId: userId, status: "PENDING" } }),
+        prisma.friendship.count({ where: { addresseeId: sessionUser.id, status: "PENDING" } }),
         prisma.event.count({
           where: {
             status: "SEARCHING",
-            OR: [{ creatorId: userId }, { participants: { some: { email: session!.user!.email ?? "" } } }],
+            OR: [{ creatorId: sessionUser.id }, { participants: { some: { email: sessionUser.email ?? "" } } }],
           },
         }),
       ])
@@ -86,7 +90,7 @@ export default async function SiteHeader() {
             one still carries min-w-[160px], and the Groups panel was reaching
             x=421 of a 375px viewport on its own.
           */}
-          {session?.user && (
+          {sessionUser && (
             <nav className="hidden items-center gap-1 sm:flex">
               {sections.map((section) => (
                 <NavDropdown key={section.href} {...section} />
@@ -94,7 +98,7 @@ export default async function SiteHeader() {
             </nav>
           )}
 
-          {session?.user ? (
+          {sessionUser ? (
             <Link
               href="/settings"
               className={buttonClass({ variant: "neutral", size: "nav", className: "flex items-center gap-2 sm:ml-2" })}
@@ -104,12 +108,12 @@ export default async function SiteHeader() {
                   already know, not disclosing anything. colorKey is the id so
                   the circle matches the one your friends see. */}
               <Avatar
-                image={session.user.image}
-                name={displayName(session.user)}
-                colorKey={session.user.id}
+                image={sessionUser.image}
+                name={displayName(sessionUser)}
+                colorKey={sessionUser.id}
                 size={24}
               />
-              {session.user.name?.split(" ")[0] ?? "Profile"}
+              {sessionUser.name?.split(" ")[0] ?? "Profile"}
             </Link>
           ) : (
             <Link href="/login" className={buttonClass({ variant: "neutral" })}>
@@ -133,7 +137,7 @@ export default async function SiteHeader() {
         the bar's px-6 puts the "Ve" at. Matching the container padding instead
         would indent the text by a pill's worth and read as a stray margin.
       */}
-      {session?.user && (
+      {sessionUser && (
         <nav className="mx-auto flex max-w-5xl items-center gap-1 px-3 pb-3 sm:hidden">
           {sections.map((section) => (
             <Link

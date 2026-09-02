@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { createUpstreamEvent, deleteUpstreamEvent } from "../../../../../lib/upstreamEvents";
 import { jsonBody } from "../../../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../../../lib/session";
 
 const reassignSchema = z.object({ newOrganizerUserId: z.string().min(1) });
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const parsed = reassignSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -23,7 +22,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
   if (event.creatorId !== userId) {
     return NextResponse.json({ error: "Only the event organizer can do this" }, { status: 403 });
   }

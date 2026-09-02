@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { parsePhone } from "../../../../lib/phone";
 import { resendPhoneVerification, startPhoneVerification } from "../../../../lib/phoneVerification";
 import { jsonBody } from "../../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../../lib/session";
 
 /**
  * The phone number on the signed-in account.
@@ -26,9 +25,9 @@ const saveSchema = z.object({
 
 /** Save a number (or replace the existing one) and text it a verification link. */
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
+  const userId = sessionUser.id;
 
   const parsed = saveSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: "Enter a phone number." }, { status: 400 });
@@ -56,10 +55,10 @@ export async function POST(req: NextRequest) {
 
 /** Text a fresh link to the number already saved -- the "resend" affordance. */
 export async function PUT() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const result = await resendPhoneVerification(session.user.id);
+  const result = await resendPhoneVerification(sessionUser.id);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
 
   return NextResponse.json({ ok: true, sent: true });
@@ -74,9 +73,9 @@ export async function PUT() {
  * token behind would mean an old text could put it back.
  */
 export async function DELETE() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
+  const userId = sessionUser.id;
 
   await prisma.$transaction([
     prisma.phoneVerificationToken.deleteMany({ where: { userId } }),

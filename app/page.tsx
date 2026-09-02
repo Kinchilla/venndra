@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../lib/auth";
 import { buttonClass } from "../lib/buttonStyles";
 import Logo from "../components/Logo";
+import { currentUser } from "../lib/session";
 
 export default async function Home() {
-  const session = await getServerSession(authOptions);
+  const sessionUser = await currentUser();
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-16 sm:py-24">
@@ -33,13 +32,13 @@ export default async function Home() {
             compares calendars and tells you which time slots work for which people.
           </p>
           <Link
-            href={session?.user ? "/events/new" : "/login?callbackUrl=/events/new"}
+            href={sessionUser ? "/events/new" : "/login?callbackUrl=/events/new"}
             className={buttonClass({ variant: "primary", size: "hero", className: "mt-8 inline-block shadow-sm" })}
           >
             + New event
           </Link>
           <Link
-            href={session?.user ? "/events" : "/login?callbackUrl=/events"}
+            href={sessionUser ? "/events" : "/login?callbackUrl=/events"}
             // font-medium/text-ink/70 stay as extras: the neutral variant is
             // colourless by default (matching its px-4 uses elsewhere), and
             // this hero pairing wants the heavier treatment.

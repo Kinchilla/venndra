@@ -1,10 +1,9 @@
-import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
-import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import EventResults from "../../../components/EventResults";
 import JoinPrompt from "../../../components/JoinPrompt";
 import BackButton from "../../../components/BackButton";
+import { currentUser } from "../../../lib/session";
 
 export default async function EventPage(
   props: {
@@ -14,8 +13,8 @@ export default async function EventPage(
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect(`/login?callbackUrl=/events/${params.id}`);
+  const sessionUser = await currentUser();
+  if (!sessionUser) redirect(`/login?callbackUrl=/events/${params.id}`);
 
   const event = await prisma.event.findUnique({
     where: { id: params.id },
@@ -23,9 +22,9 @@ export default async function EventPage(
   });
   if (!event) notFound();
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
   const isCreator = event.creatorId === userId;
-  const myParticipant = event.participants.find((p) => p.email === session.user!.email);
+  const myParticipant = event.participants.find((p) => p.email === sessionUser.email);
   if (!isCreator && !myParticipant) notFound();
 
   // writeCalendarSourceId is deliberately a loose id, not a Prisma relation

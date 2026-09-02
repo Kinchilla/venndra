@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { jsonBody } from "../../../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../../../lib/session";
 
 const patchSchema = z.object({
   checkAvailability: z.boolean().optional(),
@@ -12,10 +11,10 @@ const patchSchema = z.object({
 
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
   const parsed = patchSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 

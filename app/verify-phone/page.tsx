@@ -1,11 +1,10 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import { formatE164ForDisplay } from "../../lib/phone";
 import { buttonClass } from "../../lib/buttonStyles";
 import PhoneVerifyButton from "../../components/PhoneVerifyButton";
+import { currentUser } from "../../lib/session";
 
 /**
  * Where the link in the verification text lands.
@@ -19,8 +18,8 @@ export default async function VerifyPhonePage(props: { searchParams?: Promise<{ 
   const searchParams = await props.searchParams;
   const token = searchParams?.token;
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const sessionUser = await currentUser();
+  if (!sessionUser) {
     // Carrying the token through the sign-in round trip, so opening the text
     // on a phone that isn't signed in doesn't dead-end. The link is single-use
     // and time-limited either way.
@@ -29,7 +28,7 @@ export default async function VerifyPhonePage(props: { searchParams?: Promise<{ 
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: sessionUser.id },
     select: { phone: true, phoneCountry: true, phoneVerifiedAt: true },
   });
 

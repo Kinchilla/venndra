@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { fromZonedTime } from "date-fns-tz";
-import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { validateAllFriends, validateNoPausedInvitees } from "../../../lib/friends";
 import { emailListField } from "../../../lib/emailIdentity";
 import { checkRateLimit } from "../../../lib/rateLimit";
 import { weeklyHoursSchema } from "../../../lib/searchWindowSchema";
 import { jsonBody } from "../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../lib/session";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -35,11 +34,11 @@ const eventSchema = z
   });
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const userId = session.user.id;
-  const userEmail = session.user.email;
+  const userId = sessionUser.id;
+  const userEmail = sessionUser.email;
 
   const events = await prisma.event.findMany({
     where: {
@@ -53,13 +52,13 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const parsed = eventSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
 
   // An ordinary write-amplification guard, not a harassment one: event
   // invitations are in-app only, so a runaway loop here costs database rows
@@ -70,21 +69,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many events created — wait a moment and try again." }, { status: 429 });
   }
 
-  // session.user.email, not a fresh User row (#30). Both routes that ask this
+  // sessionUser.email, not a fresh User row (#30). Both routes that ask this
   // question next door read it off the session; this one re-queried, so one
   // question had two answers with no rule for which won.
   //
   // They cannot disagree, and that is worth stating rather than assuming.
   // lib/auth sets `session: { strategy: "database" }`, and under that strategy
   // NextAuth loads the Session row WITH its user on every request and rebuilds
-  // session.user from that row -- it is not a cached token claim. So this is
+  // sessionUser from that row -- it is not a cached token claim. So this is
   // the same value the findUnique returned, from the same read, one query
   // cheaper. (Checked in next-auth/core/routes/session.js, and lib/authAdapter
   // does not override getSessionAndUser.)
   //
   // Canonical, too: the adapter lowercases on write, so User.email is already
   // normalised by the time it reaches here. lib/emailIdentity.
-  const creatorEmail = session.user.email;
+  const creatorEmail = sessionUser.email;
   if (!creatorEmail) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
 
   // Every invited email gets a participant row. If it already matches an

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { upcomingConfirmedWhere } from "../../../../lib/eventLifecycle";
+import { currentUser, unauthorized } from "../../../../lib/session";
 
 /**
  * Lists every connected account -- Google, Microsoft and Apple/iCloud -- for
@@ -18,10 +17,10 @@ import { upcomingConfirmedWhere } from "../../../../lib/eventLifecycle";
  * is a security boundary -- a caller can always just send the DELETE.
  */
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
 
   const calendars = await prisma.connectedCalendar.findMany({
     where: { userId },

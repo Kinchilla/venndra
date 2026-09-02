@@ -1,10 +1,9 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "../../../lib/auth";
 import NewFriendForm from "../../../components/NewFriendForm";
+import { currentUser } from "../../../lib/session";
 
 export default async function NewFriendPage() {
-  const session = await getServerSession(authOptions);
+  const sessionUser = await currentUser();
   // The form itself is a client component (components/NewFriendForm), which is
   // why this page exists as a shell -- the guard has to run on the server, and
   // signed out there is nothing here that works. Every route the form touches
@@ -12,7 +11,7 @@ export default async function NewFriendPage() {
   // without an `exists`, so the falsy branch wins and the form tells you no
   // Venndra profile exists for whatever address you typed, which is a
   // confident lie rather than an error.
-  if (!session?.user) redirect("/login?callbackUrl=/friends/new");
+  if (!sessionUser) redirect("/login?callbackUrl=/friends/new");
 
   return <NewFriendForm />;
 }

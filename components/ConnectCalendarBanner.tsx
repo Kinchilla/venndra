@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../lib/auth";
 import { hasUsableCalendar } from "../lib/onboarding";
 import { buttonClass } from "../lib/buttonStyles";
+import { currentUser } from "../lib/session";
 
 /**
  * Shown to a signed-in user with no enabled calendar. Renders nothing at all
@@ -24,10 +23,10 @@ import { buttonClass } from "../lib/buttonStyles";
  * still true.
  */
 export default async function ConnectCalendarBanner() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return null;
+  const sessionUser = await currentUser();
+  if (!sessionUser) return null;
 
-  const userId = session.user.id;
+  const userId = sessionUser.id;
   if (await hasUsableCalendar(userId)) return null;
 
   return (

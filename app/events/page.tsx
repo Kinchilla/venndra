@@ -1,7 +1,5 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import { buttonClass } from "../../lib/buttonStyles";
 import { displayName } from "../../lib/displayName";
@@ -13,13 +11,14 @@ import Paginated from "../../components/Paginated";
 import CountBadge from "../../components/CountBadge";
 import ConnectCalendarBanner from "../../components/ConnectCalendarBanner";
 import DisplayNameBanner from "../../components/DisplayNameBanner";
+import { currentUser } from "../../lib/session";
 
 export default async function EventsPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/login");
-  const userId = session.user.id;
+  const sessionUser = await currentUser();
+  if (!sessionUser) redirect("/login");
+  const userId = sessionUser.id;
   const events = await prisma.event.findMany({
-    where: { OR: [{ creatorId: userId }, { participants: { some: { email: session.user.email ?? "" } } }] },
+    where: { OR: [{ creatorId: userId }, { participants: { some: { email: sessionUser.email ?? "" } } }] },
     include: {
       participants: { include: { user: { select: { name: true } } } },
       creator: { select: { name: true, email: true } },

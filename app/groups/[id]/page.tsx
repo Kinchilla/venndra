@@ -1,22 +1,21 @@
-import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
-import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import BackButton from "../../../components/BackButton";
 import GroupForm from "../../../components/GroupForm";
 import { asWeeklyHours } from "../../../lib/searchWindow";
+import { currentUser } from "../../../lib/session";
 
 export default async function EditGroupPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect(`/login?callbackUrl=/groups/${params.id}`);
+  const sessionUser = await currentUser();
+  if (!sessionUser) redirect(`/login?callbackUrl=/groups/${params.id}`);
 
   const group = await prisma.savedGroup.findUnique({ where: { id: params.id } });
-  if (!group || group.userId !== session.user.id) notFound();
+  if (!group || group.userId !== sessionUser.id) notFound();
 
   // Seeds the picker if this group has no window yet and the user switches the
   // toggle on -- otherwise they'd start from a blank grid.
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const user = await prisma.user.findUnique({ where: { id: sessionUser.id } });
 
   return (
     <main className="mx-auto max-w-lg px-6 py-12">

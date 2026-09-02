@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { jsonBody } from "../../../../../lib/requestBody";
+import { currentUser, unauthorized } from "../../../../../lib/session";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const event = await prisma.event.findUnique({
     where: { id: params.id },
@@ -16,8 +15,8 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
   });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userId = session.user.id;
-  const myParticipant = event.participants.find((p) => p.email === session.user!.email);
+  const userId = sessionUser.id;
+  const myParticipant = event.participants.find((p) => p.email === sessionUser.email);
   const isInvolved = event.creatorId === userId || !!myParticipant;
   if (!isInvolved) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -71,14 +70,14 @@ const ballotSchema = z.object({
 
 export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionUser = await currentUser();
+  if (!sessionUser) return unauthorized();
 
   const event = await prisma.event.findUnique({ where: { id: params.id }, include: { participants: true } });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!event.votingEnabled) return NextResponse.json({ error: "Voting isn't enabled for this event" }, { status: 400 });
 
-  const myParticipant = event.participants.find((p) => p.email === session.user!.email);
+  const myParticipant = event.participants.find((p) => p.email === sessionUser.email);
   if (!myParticipant) return NextResponse.json({ error: "You're not a participant on this event" }, { status: 403 });
   if (myParticipant.status !== "CONNECTED") {
     return NextResponse.json({ error: "Connect a calendar before voting" }, { status: 400 });
