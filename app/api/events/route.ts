@@ -70,8 +70,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many events created — wait a moment and try again." }, { status: 429 });
   }
 
-  const creator = await prisma.user.findUnique({ where: { id: userId } });
-  if (!creator?.email) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
+  // session.user.email, not a fresh User row (#30). Both routes that ask this
+  // question next door read it off the session; this one re-queried, so one
+  // question had two answers with no rule for which won.
+  //
+  // They cannot disagree, and that is worth stating rather than assuming.
+  // lib/auth sets `session: { strategy: "database" }`, and under that strategy
+  // NextAuth loads the Session row WITH its user on every request and rebuilds
+  // session.user from that row -- it is not a cached token claim. So this is
+  // the same value the findUnique returned, from the same read, one query
+  // cheaper. (Checked in next-auth/core/routes/session.js, and lib/authAdapter
+  // does not override getSessionAndUser.)
+  //
+  // Canonical, too: the adapter lowercases on write, so User.email is already
+  // normalised by the time it reaches here. lib/emailIdentity.
+  const creatorEmail = session.user.email;
+  if (!creatorEmail) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
 
   // Every invited email gets a participant row. If it already matches an
   // existing user with at least one connected calendar, mark them
@@ -110,7 +124,7 @@ export async function POST(req: NextRequest) {
   // accepted friend -- the picker UI already only offers friends, but this
   // is the actual enforcement point, since a raw API request could
   // otherwise bypass the UI entirely.
-  const friendError = await validateAllFriends(userId, creator.email, allEmails);
+  const friendError = await validateAllFriends(userId, creatorEmail, allEmails);
   // `code` lets callers (e.g. NewEventForm's fromEvent edit-resubmission
   // path) distinguish this specific failure from other 400s without
   // string-matching `error`, which is meant for a brand-new-event audience
@@ -125,7 +139,7 @@ export async function POST(req: NextRequest) {
   // they paused, or a raw API call all reach here otherwise. Its own `code`
   // for the same reason as not-friends: callers shouldn't have to
   // string-match to tell the two apart.
-  const pausedError = await validateNoPausedInvitees(creator.email, allEmails);
+  const pausedError = await validateNoPausedInvitees(creatorEmail, allEmails);
   if (pausedError) return NextResponse.json({ error: pausedError, code: "paused" }, { status: 400 });
 
   const existingUsers = await prisma.user.findMany({
