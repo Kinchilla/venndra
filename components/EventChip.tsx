@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
 import { usePendingAction } from "../hooks/usePendingAction";
+import { useTimeFormat } from "../hooks/useTimeFormat";
+import { formatDate, formatTime, type TimeFormat } from "../lib/timeFormat";
 import { buttonClass } from "../lib/buttonStyles";
 import { displayName } from "../lib/displayName";
 import { apiErrorMessage } from "../lib/apiError";
@@ -56,12 +58,12 @@ function formatDateRange(startIso: string, endIso: string): string {
   return `${new Date(startIso).toLocaleDateString(undefined, opts)} – ${new Date(endIso).toLocaleDateString(undefined, opts)}`;
 }
 
-function formatConfirmed(startIso: string, endIso: string): string {
-  const start = new Date(startIso);
-  const date = start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-  const startTime = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  const endTime = new Date(endIso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${date} · ${startTime} – ${endTime}`;
+// Both halves come from lib/timeFormat now, which is the point of #30's change
+// here: this used to call toLocaleTimeString with no `hour12`, so a chip showed
+// the browser's default clock while the same event on /events/[id] showed the
+// one the user had actually chosen.
+function formatConfirmed(startIso: string, endIso: string, format: TimeFormat): string {
+  return `${formatDate(startIso)} · ${formatTime(startIso, format)} – ${formatTime(endIso, format)}`;
 }
 
 // Collapses days sharing the same window back into groups, e.g. "Mon, Tue,
@@ -90,6 +92,9 @@ export default function EventChip({ event }: { event: EventChipData }) {
   // in this component's own state, in the same render that re-enables things.
   const { pending, busy, begin, release, commit } =
     usePendingAction<"cancel" | "reopen" | "leave" | "loadCandidates" | "reassign">();
+  // Read only -- the toggle that sets this lives on the event page. Before #30
+  // this chip had no idea the preference existed.
+  const [timeFormat] = useTimeFormat();
   const [actionError, setActionError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
@@ -251,12 +256,18 @@ export default function EventChip({ event }: { event: EventChipData }) {
     }
   }
 
+  // timeFormat goes in the deps: it starts at the hydration-safe default and
+  // lands a moment later (hooks/useTimeFormat), and this text has to be
+  // recomputed when it does. useClientValue is still needed on top -- this
+  // string IS on screen during the first pass, unlike EventResults' slot rows,
+  // which do not exist until a fetch resolves.
   const headerText = useClientValue(
     () =>
       event.status === "CONFIRMED" && event.confirmedStart && event.confirmedEnd
-        ? formatConfirmed(event.confirmedStart, event.confirmedEnd)
+        ? formatConfirmed(event.confirmedStart, event.confirmedEnd, timeFormat)
         : formatDateRange(event.searchStart, event.searchEnd),
-    `${event.searchStart.slice(5, 7)}/${event.searchStart.slice(8, 10)} – ${event.searchEnd.slice(5, 7)}/${event.searchEnd.slice(8, 10)}`
+    `${event.searchStart.slice(5, 7)}/${event.searchStart.slice(8, 10)} – ${event.searchEnd.slice(5, 7)}/${event.searchEnd.slice(8, 10)}`,
+    [event.status, event.confirmedStart, event.confirmedEnd, event.searchStart, event.searchEnd, timeFormat]
   );
 
   const searchWindowText = useClientValue(

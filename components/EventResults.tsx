@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useClientValue } from "../hooks/useClientValue";
+import { useTimeFormat } from "../hooks/useTimeFormat";
+import { formatDate, formatTime, type TimeFormat } from "../lib/timeFormat";
 import { buttonClass } from "../lib/buttonStyles";
 import { displayName } from "../lib/displayName";
 import { apiErrorMessage } from "../lib/apiError";
@@ -39,18 +41,12 @@ type Slot = {
   participants: ParticipantAvailability[];
 };
 type SortMode = "headcount" | "time" | "votes";
-type TimeFormat = "12h" | "24h";
 type TallyEntry = { voteCount: number; score: number; voters: { email: string; rank: number }[] };
 
-const TIME_FORMAT_STORAGE_KEY = "venndra-time-format";
-
-function formatTime(iso: string, format: TimeFormat): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", hour12: format === "12h" });
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-}
+// TimeFormat, formatTime, formatDate and the storage key moved to
+// lib/timeFormat under #30. They were declared here, which is exactly why
+// EventChip -- showing the same confirmed times over on /events -- ignored the
+// preference and rendered whatever the browser's locale happened to default to.
 
 export default function EventResults({
   eventId,
@@ -76,7 +72,9 @@ export default function EventResults({
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
   const [sortMode, setSortMode] = useState<SortMode>("headcount");
-  const [timeFormat, setTimeFormat] = useState<TimeFormat>("12h");
+  // Shared with EventChip via hooks/useTimeFormat. This component still owns
+  // the toggle; it no longer owns the preference.
+  const [timeFormat, changeTimeFormat] = useTimeFormat();
   const [data, setData] = useState<{ slots: Slot[]; minAttendees: number | null; totalParticipants: number } | null>(null);
   const [tally, setTally] = useState<Map<string, TallyEntry>>(new Map());
   const [voteState, setVoteState] = useState<{ voteTopX: number; canVote: boolean; myVotes: string[] } | null>(null);
@@ -113,28 +111,6 @@ export default function EventResults({
     { date: confirmedStartIso ? `${confirmedStartIso.slice(5, 7)}/${confirmedStartIso.slice(8, 10)}` : "", startTime: "", endTime: "" },
     [confirmedStartIso, confirmedEndIso, timeFormat]
   );
-
-  // Once someone's explicitly picked 12h/24h, remember that choice across
-  // visits. Until then, default to whatever their system already uses --
-  // Intl's hourCycle is the standard way to read that, and it's the same
-  // underlying signal the browser uses to decide how native date/time
-  // inputs (like the ones on the event-creation page) display themselves,
-  // so this keeps both pages consistent without the person having to
-  // think about it.
-  useEffect(() => {
-    const saved = typeof window !== "undefined" ? window.localStorage.getItem(TIME_FORMAT_STORAGE_KEY) : null;
-    if (saved === "12h" || saved === "24h") {
-      setTimeFormat(saved);
-      return;
-    }
-    const hourCycle = new Intl.DateTimeFormat(undefined, { hour: "numeric" }).resolvedOptions().hourCycle;
-    setTimeFormat(hourCycle === "h23" || hourCycle === "h24" ? "24h" : "12h");
-  }, []);
-
-  function changeTimeFormat(next: TimeFormat) {
-    setTimeFormat(next);
-    window.localStorage.setItem(TIME_FORMAT_STORAGE_KEY, next);
-  }
 
   useEffect(() => {
     if (status !== "SEARCHING") return;
