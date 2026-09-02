@@ -35,7 +35,11 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   // the CONFIRMED half already covered by the 409 above), and the same
   // swallow-and-log. Best-effort there as here -- an upstream event deleted by
   // hand is not a reason to refuse to reopen the search.
-  await deleteUpstreamEvent(event);
+  //
+  // The context argument restores the wording its own copy used. Sentry titles
+  // issues by console message, so without it a failed reschedule delete and a
+  // failed cancel delete become one indistinguishable issue.
+  await deleteUpstreamEvent(event, "reschedule");
 
   // Clear externalEventId/writeCalendarSourceId too -- since the old
   // calendar event is gone, the next confirm should CREATE a fresh one,

@@ -3,10 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
-import { deleteGoogleEvent } from "../../../../../lib/calendar/google";
-import { deleteMicrosoftEvent } from "../../../../../lib/calendar/microsoft";
-import { deleteAppleEvent } from "../../../../../lib/calendar/apple";
-import { createUpstreamEvent } from "../../../../../lib/upstreamEvents";
+import { createUpstreamEvent, deleteUpstreamEvent } from "../../../../../lib/upstreamEvents";
 import { jsonBody } from "../../../../../lib/requestBody";
 
 const reassignSchema = z.object({ newOrganizerUserId: z.string().min(1) });
@@ -75,11 +72,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     return NextResponse.json({ error: "This event has no confirmed time to transfer" }, { status: 400 });
   }
 
-  const oldWriteSource = await prisma.calendarSource.findUnique({
-    where: { id: event.writeCalendarSourceId },
-    include: { connectedCalendar: true },
-  });
-
   // A stays a participant through the transfer (unlike the old "leave and
   // hand off" behavior), so they belong on the new invite same as anyone
   // else -- no filtering out the departing organizer here anymore.
@@ -129,28 +121,24 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     return NextResponse.json({ error: "That calendar type doesn't support creating events yet" }, { status: 400 });
   }
 
-  // Best-effort cleanup of the old event -- the transfer already succeeded
-  // on C's calendar at this point, so don't block on this the same way
+  // Best-effort cleanup of the old event -- the transfer already succeeded on
+  // C's calendar at this point, so don't block on this, the same way
   // cancel/route.ts and leave/route.ts don't block on their own deletes.
-  if (oldWriteSource && event.externalEventId) {
-    try {
-      if (oldWriteSource.connectedCalendar.provider === "GOOGLE" && oldWriteSource.connectedCalendar.nextAuthAccountId) {
-        await deleteGoogleEvent(oldWriteSource.connectedCalendar.nextAuthAccountId, oldWriteSource.externalId, event.externalEventId);
-      } else if (
-        oldWriteSource.connectedCalendar.provider === "MICROSOFT" &&
-        oldWriteSource.connectedCalendar.nextAuthAccountId
-      ) {
-        await deleteMicrosoftEvent(oldWriteSource.connectedCalendar.nextAuthAccountId, event.externalEventId);
-      } else if (oldWriteSource.connectedCalendar.provider === "APPLE_CALDAV" && event.externalEventHref) {
-        await deleteAppleEvent(oldWriteSource.connectedCalendar.id, {
-          href: event.externalEventHref,
-          etag: event.externalEventEtag,
-        });
-      }
-    } catch (err) {
-      console.error("Failed to delete the old organizer's calendar event during reassign:", err);
-    }
-  }
+  //
+  // `event` still describes the OLD calendar here: writeCalendarSourceId,
+  // externalEventId and the Apple href/etag are all overwritten by the update
+  // below, not before it, so the helper resolves exactly the source this
+  // route's own copy used to look up by hand. Its CONFIRMED guard is already
+  // discharged by the SEARCHING branch that returned above.
+  //
+  // The one real difference: that lookup used to happen before the create and
+  // now happens after it, because the helper does its own. So if the old
+  // CalendarSource row disappears during the create's round trip, this skips
+  // rather than calling a provider with a source that no longer exists. Both
+  // end with the old event still standing and nothing raised -- the previous
+  // code would have thrown into its own catch -- and skipping is the more
+  // honest of the two.
+  await deleteUpstreamEvent(event, "reassign");
 
   // A's own EventParticipant/EventVote rows are left untouched throughout --
   // they remain a regular participant after the transfer, free to leave

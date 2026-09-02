@@ -25,12 +25,15 @@
  * tell anybody otherwise (Apple), recorded on the event for the organizer to
  * see on their next page load.
  *
- * The reassign route uses createUpstreamEvent below, but still has its own
- * copy of the DELETE half. That one is deliberately sequenced around the
- * create-on-the-new-calendar step that has to succeed first, and it deletes
- * from the OLD write source while event.writeCalendarSourceId still names it.
- * Left as it is until someone works through whether the sequencing argument
- * really survives contact with a helper called later in the same function.
+ * The reassign route kept its own copy of the delete half longer than the
+ * others, on the argument that it is "deliberately sequenced around a
+ * create-on-the-new-calendar step that has to succeed first". Worked through
+ * under #30, and the argument does not hold: sequencing is about WHERE a call
+ * happens, and a helper called after the create is as sequenced as a block
+ * written after it. reassign now calls deleteUpstreamEvent too, in the same
+ * position its own copy occupied.
+ *
+ * Every caller: cancel, reopen, reassign, and account deletion.
  */
 
 import type { ConnectedCalendar, Event } from "@prisma/client";
@@ -66,8 +69,17 @@ function loadWriteSource(event: UpstreamEvent) {
  *
  * A no-op unless the event is CONFIRMED and actually reached a calendar: a
  * still-SEARCHING event has no upstream counterpart to remove.
+ *
+ * `context` names the flow this delete belongs to, and exists for one specific
+ * reason: lib/sentryOptions installs captureConsoleIntegration, so every
+ * console.error below becomes a Sentry issue TITLED BY ITS MESSAGE. Callers
+ * that had their own wording before this helper absorbed them would otherwise
+ * collapse into a single issue, and "a delete failed somewhere" is a much
+ * worse thing to be paged about than "the reschedule delete failed". Passed
+ * only by the callers that had a distinct message of their own, so the ones
+ * that did not keep their existing grouping exactly.
  */
-export async function deleteUpstreamEvent(event: UpstreamEvent): Promise<void> {
+export async function deleteUpstreamEvent(event: UpstreamEvent, context?: string): Promise<void> {
   if (event.status !== "CONFIRMED" || !event.externalEventId || !event.writeCalendarSourceId) return;
 
   const writeSource = await loadWriteSource(event);
@@ -84,7 +96,7 @@ export async function deleteUpstreamEvent(event: UpstreamEvent): Promise<void> {
   } catch (err) {
     // Already deleted by hand, or the credentials are gone -- either way the
     // Venndra-side change should still go through.
-    console.error("Failed to delete upstream calendar event:", err);
+    console.error(`Failed to delete upstream calendar event${context ? ` during ${context}` : ""}:`, err);
   }
 }
 
