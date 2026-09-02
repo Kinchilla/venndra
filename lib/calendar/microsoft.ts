@@ -1,6 +1,6 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { prisma } from "../prisma";
-import { markAccountAuthFailed } from "./authHealth";
+import { DeadGrantError, markAccountAuthFailed } from "./authHealth";
 import type { BusyInterval, CalendarListing } from "./google";
 
 async function getValidAccessToken(accountId: string): Promise<string> {
@@ -25,12 +25,22 @@ async function getValidAccessToken(accountId: string): Promise<string> {
 
   const tokens = await resp.json();
   if (!resp.ok) {
-    // Same OAuth2 error name as Google's, but reached without gaxios, so it
-    // is classified here rather than through isDeadGrantError's response
-    // shape. Everything else from this endpoint is transient and stays
+    const message = `Microsoft token refresh failed: ${JSON.stringify(tokens)}`;
+
+    // Same OAuth2 error name as Google's, but reached without gaxios, so
+    // isDeadGrantError's response shape never matches it. Flagging the account
+    // is only half of what this case owes its callers: this throw escapes the
+    // whole module (it happens before the per-calendar loop, unlike Google's),
+    // so it also has to carry the classification out with it, or the catch in
+    // lib/availability.ts reports an expected reconnect as an application
+    // error. Everything else from this endpoint is transient and stays
     // unflagged.
-    if (tokens?.error === "invalid_grant") await markAccountAuthFailed(accountId);
-    throw new Error(`Microsoft token refresh failed: ${JSON.stringify(tokens)}`);
+    if (tokens?.error === "invalid_grant") {
+      await markAccountAuthFailed(accountId);
+      throw new DeadGrantError(message);
+    }
+
+    throw new Error(message);
   }
 
   await prisma.account.update({

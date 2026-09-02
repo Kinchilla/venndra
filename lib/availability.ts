@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { getGoogleBusyIntervals } from "./calendar/google";
 import { getMicrosoftBusyIntervals } from "./calendar/microsoft";
 import { getAppleBusyIntervals } from "./calendar/apple";
+import { logCalendarFailure } from "./calendar/authHealth";
 import type { BusyInterval } from "./calendar/google";
 import { buildSlots, searchDays, type Slot, type WeeklyHours, type SlotParticipant } from "./availabilitySlots";
 
@@ -43,7 +44,7 @@ async function getUserBusyIntervals(userId: string, from: Date, to: Date): Promi
         }
         return { intervals: [], hasError: false };
       } catch (err) {
-        console.error(`Failed to fetch busy intervals for connected calendar ${cal.id}:`, err);
+        logCalendarFailure(`Failed to fetch busy intervals for connected calendar ${cal.id}:`, err);
         return { intervals: [], hasError: true };
       }
     })

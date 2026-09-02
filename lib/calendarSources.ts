@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { listGoogleCalendars } from "./calendar/google";
 import { listMicrosoftCalendars } from "./calendar/microsoft";
 import { listAppleCalendars } from "./calendar/apple";
+import { logCalendarFailure } from "./calendar/authHealth";
 import type { CalendarListing } from "./calendar/google";
 
 /**
@@ -37,7 +38,7 @@ export async function populateCalendarSources(connectedCalendarId: string): Prom
   } catch (err) {
     // A transient failure here (e.g. a rate limit) shouldn't wipe out
     // existing CalendarSource rows -- bail without touching anything.
-    console.error(`Failed to list calendars for connected calendar ${connectedCalendarId}:`, err);
+    logCalendarFailure(`Failed to list calendars for connected calendar ${connectedCalendarId}:`, err);
     return;
   }
 

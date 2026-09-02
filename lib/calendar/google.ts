@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import { prisma } from "../prisma";
-import { noteDeadGrant } from "./authHealth";
+import { logCalendarFailure, noteDeadGrant } from "./authHealth";
 
 /**
  * Builds an authenticated Google client for a given internal Account.id,
@@ -162,8 +162,8 @@ export async function getGoogleBusyIntervals(
           }
           return intervals;
         } catch (err) {
-          console.error(`Failed to read Google calendar ${calendarId} on account ${accountId}:`, err);
           await noteDeadGrant(accountId, err);
+          logCalendarFailure(`Failed to read Google calendar ${calendarId} on account ${accountId}:`, err);
           hasError = true;
           return [];
         }
