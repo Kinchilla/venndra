@@ -73,3 +73,90 @@ export async function validateNoPausedInvitees(userEmail: string, emails: string
   // issue #6's leak in a sentence rather than in a chip.
   return pausedInviteeMessage(paused.map(displayName));
 }
+/**
+ * Everything the friends UI needs about one relationship: who, and which row
+ * to act on.
+ *
+ * `friendshipId` is the Friendship row, not the user -- it is what
+ * FriendChip's accept/decline/remove buttons put in their URLs, which is why
+ * it is named for the row rather than being a bare `id` that reads like it
+ * belongs to the person.
+ */
+export type FriendListEntry = {
+  friendshipId: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+    /**
+     * Whether they are paused, never since when. The flag is what greys them
+     * out in the picker; the timestamp behind it is the paused person's own
+     * business, and nothing on this side of the app could do anything useful
+     * with it.
+     */
+    paused: boolean;
+  };
+};
+
+const FRIEND_USER_SELECT = { id: true, name: true, email: true, image: true, pausedAt: true };
+
+function toFriendUser<T extends { pausedAt: Date | null }>({ pausedAt, ...user }: T) {
+  return { ...user, paused: pausedAt !== null };
+}
+
+/**
+ * The signed-in user's friends, split the three ways the UI shows them (#30).
+ *
+ * GET /api/friends and app/friends/page.tsx both answered this, with the same
+ * two queries, the same select, the same pausedAt-to-flag mapping and the same
+ * three-way partition written out twice. The shape was additionally described
+ * a third time, structurally, by the page's FriendSection props.
+ *
+ * The only thing that actually differed was a key name -- the route called it
+ * `friendshipId`, the page called it `id` -- so this returns `friendshipId`,
+ * which leaves the route's wire format byte-identical and renames only the
+ * page's own local. Nothing reads the route's `friendshipId` today
+ * (FriendPicker takes `.user` and ignores the rest), so the name was chosen
+ * for the reader rather than for compatibility, but not changing a published
+ * field is free and worth having.
+ *
+ * A friendship is directional in the database -- requester and addressee --
+ * and not directional to a person looking at their friends list. Collapsing
+ * the two directions is most of what this function is for, and doing it in one
+ * place is what stops "sent" and "received" drifting apart between the two
+ * callers.
+ */
+export async function loadFriendLists(userId: string): Promise<{
+  friends: FriendListEntry[];
+  pendingSent: FriendListEntry[];
+  pendingReceived: FriendListEntry[];
+}> {
+  const [sent, received] = await Promise.all([
+    prisma.friendship.findMany({
+      where: { requesterId: userId },
+      include: { addressee: { select: FRIEND_USER_SELECT } },
+    }),
+    prisma.friendship.findMany({
+      where: { addresseeId: userId },
+      include: { requester: { select: FRIEND_USER_SELECT } },
+    }),
+  ]);
+
+  return {
+    friends: [
+      ...sent
+        .filter((f) => f.status === "ACCEPTED")
+        .map((f) => ({ friendshipId: f.id, user: toFriendUser(f.addressee) })),
+      ...received
+        .filter((f) => f.status === "ACCEPTED")
+        .map((f) => ({ friendshipId: f.id, user: toFriendUser(f.requester) })),
+    ],
+    pendingSent: sent
+      .filter((f) => f.status === "PENDING")
+      .map((f) => ({ friendshipId: f.id, user: toFriendUser(f.addressee) })),
+    pendingReceived: received
+      .filter((f) => f.status === "PENDING")
+      .map((f) => ({ friendshipId: f.id, user: toFriendUser(f.requester) })),
+  };
+}

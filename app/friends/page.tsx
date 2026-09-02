@@ -2,8 +2,8 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { authOptions } from "../../lib/auth";
-import { prisma } from "../../lib/prisma";
 import { buttonClass } from "../../lib/buttonStyles";
+import { loadFriendLists, type FriendListEntry } from "../../lib/friends";
 import BackButton from "../../components/BackButton";
 import FriendChip from "../../components/FriendChip";
 import Paginated from "../../components/Paginated";
@@ -13,36 +13,10 @@ import DisplayNameBanner from "../../components/DisplayNameBanner";
 export default async function FriendsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
-  const userId = session.user.id;
-
-  const USER_SELECT = { id: true, name: true, email: true, image: true, pausedAt: true };
-
-  const [sent, received] = await Promise.all([
-    prisma.friendship.findMany({
-      where: { requesterId: userId },
-      include: { addressee: { select: USER_SELECT } },
-    }),
-    prisma.friendship.findMany({
-      where: { addresseeId: userId },
-      include: { requester: { select: USER_SELECT } },
-    }),
-  ]);
-
-  // Same trade as the /api/friends route makes: the flag crosses to the
-  // chip, the timestamp behind it doesn't.
-  const toFriendUser = <T extends { pausedAt: Date | null }>({ pausedAt, ...user }: T) => ({
-    ...user,
-    paused: pausedAt !== null,
-  });
-
-  const friends = [
-    ...sent.filter((f) => f.status === "ACCEPTED").map((f) => ({ id: f.id, user: toFriendUser(f.addressee) })),
-    ...received.filter((f) => f.status === "ACCEPTED").map((f) => ({ id: f.id, user: toFriendUser(f.requester) })),
-  ];
-  const pendingSent = sent.filter((f) => f.status === "PENDING").map((f) => ({ id: f.id, user: toFriendUser(f.addressee) }));
-  const pendingReceived = received
-    .filter((f) => f.status === "PENDING")
-    .map((f) => ({ id: f.id, user: toFriendUser(f.requester) }));
+  // Shared with GET /api/friends, which returns these same three lists over
+  // HTTP (#30). Both used to build them out of the same two queries and the
+  // same three-way partition, written out twice.
+  const { friends, pendingSent, pendingReceived } = await loadFriendLists(session.user.id);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
@@ -71,10 +45,7 @@ function FriendSection({
   kind,
 }: {
   title: string;
-  entries: {
-    id: string;
-    user: { id: string; name: string | null; email: string | null; image: string | null; paused: boolean };
-  }[];
+  entries: FriendListEntry[];
   kind: "friend" | "sent" | "received";
 }) {
   return (
@@ -83,7 +54,7 @@ function FriendSection({
       <div className="mt-3 grid grid-cols-1 gap-2">
         <Paginated>
           {entries.map((e) => (
-            <FriendChip key={e.id} friendshipId={e.id} user={e.user} kind={kind} />
+            <FriendChip key={e.friendshipId} friendshipId={e.friendshipId} user={e.user} kind={kind} />
           ))}
         </Paginated>
         {entries.length === 0 && <p className="text-sm text-ink/50">Nothing here yet.</p>}
