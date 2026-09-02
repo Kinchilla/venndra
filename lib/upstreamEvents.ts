@@ -25,17 +25,24 @@
  * tell anybody otherwise (Apple), recorded on the event for the organizer to
  * see on their next page load.
  *
- * NOT used by the reassign route, which has its own copy of the delete half.
- * That one is deliberately sequenced around a create-on-the-new-calendar
- * step that has to succeed first, and folding it in here would mean bending
- * this helper around an ordering constraint only that route has.
+ * The reassign route uses createUpstreamEvent below, but still has its own
+ * copy of the DELETE half. That one is deliberately sequenced around the
+ * create-on-the-new-calendar step that has to succeed first, and it deletes
+ * from the OLD write source while event.writeCalendarSourceId still names it.
+ * Left as it is until someone works through whether the sequencing argument
+ * really survives contact with a helper called later in the same function.
  */
 
-import type { Event } from "@prisma/client";
+import type { ConnectedCalendar, Event } from "@prisma/client";
 import { prisma } from "./prisma";
-import { deleteGoogleEvent, removeGoogleAttendee } from "./calendar/google";
-import { deleteMicrosoftEvent, removeMicrosoftAttendee } from "./calendar/microsoft";
-import { buildAppleDescriptionText, deleteAppleEvent, updateAppleEventDescription } from "./calendar/apple";
+import { createGoogleEvent, deleteGoogleEvent, removeGoogleAttendee } from "./calendar/google";
+import { createMicrosoftEvent, deleteMicrosoftEvent, removeMicrosoftAttendee } from "./calendar/microsoft";
+import {
+  buildAppleDescriptionText,
+  createAppleEvent,
+  deleteAppleEvent,
+  updateAppleEventDescription,
+} from "./calendar/apple";
 
 /** Everything either function below needs off an Event, and nothing more -- so callers can pass a partial select. */
 export type UpstreamEvent = Pick<
@@ -152,4 +159,112 @@ export async function removeAttendeeFromUpstreamEvent(
       });
     }
   }
+}
+
+/**
+ * The calendar a write actually goes through: a CalendarSource plus the
+ * account behind it. A structural subset rather than the Prisma row, for the
+ * same reason as UpstreamEvent above -- callers pass whatever their own query
+ * returned, and this names the three fields that matter.
+ */
+export type UpstreamWriteTarget = {
+  /** CalendarSource.externalId -- the provider's own calendar id, or for Apple the CalDAV collection URL. */
+  externalId: string;
+  connectedCalendar: Pick<ConnectedCalendar, "id" | "provider" | "nextAuthAccountId">;
+};
+
+/** What to put on the calendar. Nullable fields are the Prisma columns as they come. */
+export type UpstreamEventDetails = {
+  title: string;
+  description: string | null;
+  location: string | null;
+  start: Date;
+  end: Date;
+  /**
+   * The real invitee list, for Google and Microsoft. Excludes whoever owns the
+   * calendar being written to -- they are implicitly on their own event, and
+   * inviting yourself reads oddly on both providers.
+   */
+  attendeeEmails: string[];
+  /**
+   * Everyone, INCLUDING the calendar's owner, for Apple. CalDAV has no real
+   * attendee list, so the names go into a plain-text DESCRIPTION instead, and
+   * there is no reason to leave the organizer out of a reference list.
+   */
+  participants: { email: string; name: string | null }[];
+};
+
+/** Apple returns an href and an ETag as well; the other two return an id and nothing else. */
+export type CreatedUpstreamEvent = {
+  externalEventId: string;
+  externalEventHref?: string;
+  externalEventEtag: string | null;
+};
+
+/**
+ * Creates the real calendar event, on whichever provider the write target
+ * belongs to.
+ *
+ * Written out in full by the confirm route, then again by reassign when
+ * transferring an event to a new organizer's calendar -- the same three
+ * branches, the same argument shape, the same Apple special case, a few files
+ * apart (#30). That is exactly what this module exists to stop: three
+ * providers with three sets of quirks, where a fix applied to one copy is a
+ * bug still live in the other.
+ *
+ * UNLIKE the two functions above, this one is NOT best-effort and DOES throw.
+ * They are cleanup after a decision the user already made, so failing quietly
+ * is right. This one IS the decision: if it fails, nothing should be recorded
+ * as confirmed or transferred. The two callers then differ in what they do
+ * about a failure -- confirm lets it propagate, reassign catches it to say
+ * "nothing was changed" -- so the handling deliberately stays at the call
+ * sites rather than being averaged into one behaviour here.
+ *
+ * Returns null, rather than throwing, for a provider that cannot create
+ * events. That is not a failure but an unreachable state: every provider that
+ * can be a write target is handled here. It is a guard against a future
+ * CalendarProvider being added without a matching branch, and both callers
+ * answer it with the same 400.
+ */
+export async function createUpstreamEvent(
+  writeSource: UpstreamWriteTarget,
+  details: UpstreamEventDetails
+): Promise<CreatedUpstreamEvent | null> {
+  const calendar = writeSource.connectedCalendar;
+
+  // Both providers below take description/location as optional strings, where
+  // the Prisma columns are nullable -- converted once here rather than at each
+  // call site.
+  const common = {
+    title: details.title,
+    description: details.description ?? undefined,
+    location: details.location ?? undefined,
+    start: details.start,
+    end: details.end,
+  };
+
+  if (calendar.provider === "GOOGLE" && calendar.nextAuthAccountId) {
+    const externalEventId = await createGoogleEvent(calendar.nextAuthAccountId, writeSource.externalId, {
+      ...common,
+      attendeeEmails: details.attendeeEmails,
+    });
+    return { externalEventId, externalEventEtag: null };
+  }
+
+  if (calendar.provider === "MICROSOFT" && calendar.nextAuthAccountId) {
+    const externalEventId = await createMicrosoftEvent(calendar.nextAuthAccountId, writeSource.externalId, {
+      ...common,
+      attendeeEmails: details.attendeeEmails,
+    });
+    return { externalEventId, externalEventEtag: null };
+  }
+
+  if (calendar.provider === "APPLE_CALDAV") {
+    return await createAppleEvent(calendar.id, writeSource.externalId, {
+      ...common,
+      participants: details.participants,
+    });
+  }
+
+  return null;
 }

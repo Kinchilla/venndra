@@ -3,9 +3,10 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
-import { createGoogleEvent, updateGoogleEventTime } from "../../../../../lib/calendar/google";
-import { createMicrosoftEvent, updateMicrosoftEventTime } from "../../../../../lib/calendar/microsoft";
-import { createAppleEvent, updateAppleEventTime } from "../../../../../lib/calendar/apple";
+import { updateGoogleEventTime } from "../../../../../lib/calendar/google";
+import { updateMicrosoftEventTime } from "../../../../../lib/calendar/microsoft";
+import { updateAppleEventTime } from "../../../../../lib/calendar/apple";
+import { createUpstreamEvent } from "../../../../../lib/upstreamEvents";
 
 const confirmSchema = z.object({ start: z.string().datetime() });
 
@@ -56,51 +57,30 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   }
 
   const { connectedCalendar } = writeSource;
-  const attendeeEmails = event.participants
-    .map((p) => p.email)
-    .filter((email) => email !== session.user!.email);
 
   let externalEventId: string | undefined = event.externalEventId ?? undefined;
   let externalEventHref: string | undefined = event.externalEventHref ?? undefined;
   let externalEventEtag: string | null = event.externalEventEtag ?? null;
 
-  if (connectedCalendar.provider === "GOOGLE" && connectedCalendar.nextAuthAccountId) {
-    if (isReschedule) {
+  // Reschedule and first-time confirm are the OUTER branch now, with the
+  // provider dispatch inside each. It used to be the other way round, which
+  // put a move and a create side by side in every provider's arm and left the
+  // create looking like three unrelated blocks rather than the one thing
+  // reassign also needed. Same six combinations, tested in the same order.
+  if (isReschedule) {
+    if (connectedCalendar.provider === "GOOGLE" && connectedCalendar.nextAuthAccountId) {
       await updateGoogleEventTime(connectedCalendar.nextAuthAccountId, writeSource.externalId, externalEventId!, { start, end });
-    } else {
-      externalEventId = await createGoogleEvent(connectedCalendar.nextAuthAccountId, writeSource.externalId, {
-        title: event.title,
-        description: event.description ?? undefined,
-        location: event.location ?? undefined,
-        start,
-        end,
-        attendeeEmails,
-      });
-    }
-  } else if (connectedCalendar.provider === "MICROSOFT" && connectedCalendar.nextAuthAccountId) {
-    if (isReschedule) {
+    } else if (connectedCalendar.provider === "MICROSOFT" && connectedCalendar.nextAuthAccountId) {
       await updateMicrosoftEventTime(connectedCalendar.nextAuthAccountId, externalEventId!, { start, end });
-    } else {
-      externalEventId = await createMicrosoftEvent(connectedCalendar.nextAuthAccountId, writeSource.externalId, {
-        title: event.title,
-        description: event.description ?? undefined,
-        location: event.location ?? undefined,
-        start,
-        end,
-        attendeeEmails,
-      });
-    }
-  } else if (connectedCalendar.provider === "APPLE_CALDAV") {
-    // Apple has no separate "update time only" concept the way
-    // Google/Microsoft do -- a reschedule is a full re-PUT of the VEVENT.
-    // In practice this isReschedule branch won't be exercised for Apple in
-    // this app's normal flow: reopen/route.ts unconditionally deletes the
-    // upstream Apple event and nulls externalEventId/externalEventHref
-    // before handing back here, so a rescheduled Apple event always takes
-    // the create path below with a fresh UID. Kept for structural parity
-    // with Google/Microsoft and in case isReschedule is ever reached
-    // another way.
-    if (isReschedule) {
+    } else if (connectedCalendar.provider === "APPLE_CALDAV") {
+      // Apple has no separate "update time only" concept the way
+      // Google/Microsoft do -- a reschedule is a full re-PUT of the VEVENT.
+      // In practice this branch won't be exercised for Apple in this app's
+      // normal flow: reopen/route.ts deletes the upstream Apple event and
+      // nulls externalEventId/externalEventHref before handing back here, so
+      // a rescheduled Apple event always takes the create path below with a
+      // fresh UID. Kept for structural parity with Google/Microsoft and in
+      // case isReschedule is ever reached another way.
       const result = await updateAppleEventTime(connectedCalendar.id, {
         href: event.externalEventHref!,
         etag: event.externalEventEtag,
@@ -109,31 +89,37 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       });
       externalEventEtag = result.externalEventEtag;
     } else {
-      // Includes the organizer themselves, unlike Google/Microsoft's
-      // attendeeEmails above -- this is just a plain-text reference list
-      // in the DESCRIPTION, not a real attendee list, so there's no reason
-      // to exclude the organizer's own name from it.
-      const participantsForDescription = event.participants.map((p) => ({
-        email: p.email,
-        name: p.user?.name ?? null,
-      }));
-      const result = await createAppleEvent(connectedCalendar.id, writeSource.externalId, {
-        title: event.title,
-        description: event.description ?? undefined,
-        location: event.location ?? undefined,
-        start,
-        end,
-        participants: participantsForDescription,
-      });
-      externalEventId = result.externalEventId;
-      externalEventHref = result.externalEventHref;
-      externalEventEtag = result.externalEventEtag;
+      return NextResponse.json({ error: "That calendar type doesn't support creating events yet" }, { status: 400 });
     }
   } else {
-    // Shouldn't happen -- every provider that can be a write target is
-    // handled above; guard against a future provider being added to
-    // CalendarProvider without a matching branch here.
-    return NextResponse.json({ error: "That calendar type doesn't support creating events yet" }, { status: 400 });
+    // lib/upstreamEvents, shared with reassign, which creates the same event
+    // on a new organizer's calendar. Deliberately NOT wrapped in a try here:
+    // this route has never caught a provider failure, and swallowing one
+    // would record an event as CONFIRMED that never reached anybody's
+    // calendar. reassign catches it because by that point it has something to
+    // report as undone -- which is exactly why the handling stays out here at
+    // the call sites instead of being averaged into the helper.
+    const created = await createUpstreamEvent(writeSource, {
+      title: event.title,
+      description: event.description,
+      location: event.location,
+      start,
+      end,
+      // The organizer owns the calendar, so they are not invited to their own
+      // event. Apple's list is a plain-text reference in the DESCRIPTION
+      // rather than a real attendee list, and does include them.
+      attendeeEmails: event.participants.map((p) => p.email).filter((email) => email !== session.user!.email),
+      participants: event.participants.map((p) => ({ email: p.email, name: p.user?.name ?? null })),
+    });
+    if (!created) {
+      // Shouldn't happen -- every provider that can be a write target is
+      // handled; guards against a future provider being added to
+      // CalendarProvider without a matching branch.
+      return NextResponse.json({ error: "That calendar type doesn't support creating events yet" }, { status: 400 });
+    }
+    externalEventId = created.externalEventId;
+    externalEventHref = created.externalEventHref;
+    externalEventEtag = created.externalEventEtag;
   }
 
   const updated = await prisma.event.update({

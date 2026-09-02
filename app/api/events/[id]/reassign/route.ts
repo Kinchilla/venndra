@@ -3,9 +3,10 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
-import { createGoogleEvent, deleteGoogleEvent } from "../../../../../lib/calendar/google";
-import { createMicrosoftEvent, deleteMicrosoftEvent } from "../../../../../lib/calendar/microsoft";
-import { createAppleEvent, deleteAppleEvent } from "../../../../../lib/calendar/apple";
+import { deleteGoogleEvent } from "../../../../../lib/calendar/google";
+import { deleteMicrosoftEvent } from "../../../../../lib/calendar/microsoft";
+import { deleteAppleEvent } from "../../../../../lib/calendar/apple";
+import { createUpstreamEvent } from "../../../../../lib/upstreamEvents";
 
 const reassignSchema = z.object({ newOrganizerUserId: z.string().min(1) });
 
@@ -89,55 +90,42 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     .map((p) => p.email)
     .filter((email) => email !== newOrganizerParticipant.email);
 
-  const { connectedCalendar } = newWriteSource;
-  let externalEventId: string | undefined;
-  let externalEventHref: string | undefined;
-  let externalEventEtag: string | null = null;
-
+  // lib/upstreamEvents, shared with confirm/route.ts, which creates the very
+  // same event when a slot is first picked. This route used to carry its own
+  // copy of the three-provider create -- same branches, same argument shape,
+  // same Apple special case (#30). That block is the one lib/upstreamEvents
+  // exists to stop being duplicated: three APIs, three sets of quirks, and a
+  // fix applied to one copy is a bug still live in the other.
+  //
+  // The helper throws rather than swallowing, and this route catches, because
+  // here a failure has to be reported as "nothing was changed" -- the old
+  // event is still standing on the previous organizer's calendar at this
+  // point, and that is a fact the user needs. confirm lets the same throw
+  // propagate, for its own reasons. That divergence is why the try stays here
+  // rather than moving into the helper.
+  let created;
   try {
-    if (connectedCalendar.provider === "GOOGLE" && connectedCalendar.nextAuthAccountId) {
-      externalEventId = await createGoogleEvent(connectedCalendar.nextAuthAccountId, newWriteSource.externalId, {
-        title: event.title,
-        description: event.description ?? undefined,
-        location: event.location ?? undefined,
-        start: event.confirmedStart,
-        end: event.confirmedEnd,
-        attendeeEmails,
-      });
-    } else if (connectedCalendar.provider === "MICROSOFT" && connectedCalendar.nextAuthAccountId) {
-      externalEventId = await createMicrosoftEvent(connectedCalendar.nextAuthAccountId, newWriteSource.externalId, {
-        title: event.title,
-        description: event.description ?? undefined,
-        location: event.location ?? undefined,
-        start: event.confirmedStart,
-        end: event.confirmedEnd,
-        attendeeEmails,
-      });
-    } else if (connectedCalendar.provider === "APPLE_CALDAV") {
-      const participantsForDescription = event.participants.map((p) => ({
-        email: p.email,
-        name: p.user?.name ?? null,
-      }));
-      const result = await createAppleEvent(connectedCalendar.id, newWriteSource.externalId, {
-        title: event.title,
-        description: event.description ?? undefined,
-        location: event.location ?? undefined,
-        start: event.confirmedStart,
-        end: event.confirmedEnd,
-        participants: participantsForDescription,
-      });
-      externalEventId = result.externalEventId;
-      externalEventHref = result.externalEventHref;
-      externalEventEtag = result.externalEventEtag;
-    } else {
-      return NextResponse.json({ error: "That calendar type doesn't support creating events yet" }, { status: 400 });
-    }
+    created = await createUpstreamEvent(newWriteSource, {
+      title: event.title,
+      description: event.description,
+      location: event.location,
+      start: event.confirmedStart,
+      end: event.confirmedEnd,
+      attendeeEmails,
+      // Apple has no attendee list, so the names go in a plain-text
+      // DESCRIPTION instead -- everyone, unlike attendeeEmails above, which
+      // leaves out the new organizer as the calendar's owner.
+      participants: event.participants.map((p) => ({ email: p.email, name: p.user?.name ?? null })),
+    });
   } catch (err) {
     console.error("Failed to create event on the new organizer's calendar during reassign:", err);
     return NextResponse.json(
       { error: "Couldn't create this event on their calendar -- nothing was changed." },
       { status: 500 }
     );
+  }
+  if (!created) {
+    return NextResponse.json({ error: "That calendar type doesn't support creating events yet" }, { status: 400 });
   }
 
   // Best-effort cleanup of the old event -- the transfer already succeeded
@@ -172,9 +160,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     data: {
       creatorId: newOrganizerUserId,
       writeCalendarSourceId: newWriteSource.id,
-      externalEventId: externalEventId ?? null,
-      externalEventHref: externalEventHref ?? null,
-      externalEventEtag,
+      externalEventId: created.externalEventId,
+      externalEventHref: created.externalEventHref ?? null,
+      externalEventEtag: created.externalEventEtag,
       writeError: null,
     },
   });
