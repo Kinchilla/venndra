@@ -7,6 +7,7 @@ import { useClientValue } from "../hooks/useClientValue";
 import { usePendingAction } from "../hooks/usePendingAction";
 import { useTimeFormat } from "../hooks/useTimeFormat";
 import { formatDate, formatTime, type TimeFormat } from "../lib/timeFormat";
+import type { WeeklyHours } from "../lib/searchWindow";
 import { buttonClass } from "../lib/buttonStyles";
 import { displayName } from "../lib/displayName";
 import { apiErrorMessage } from "../lib/apiError";
@@ -42,7 +43,7 @@ type EventChipData = {
   durationMin: number;
   searchStart: string; // ISO string, not a Date -- see note above
   searchEnd: string;
-  filters: Record<string, [string, string][]>;
+  filters: WeeklyHours;
   minAttendees: number | null;
   confirmedStart: string | null;
   confirmedEnd: string | null;
@@ -68,7 +69,7 @@ function formatConfirmed(startIso: string, endIso: string, format: TimeFormat): 
 
 // Collapses days sharing the same window back into groups, e.g. "Mon, Tue,
 // Wed: 18:00–22:00" -- mirrors how FiltersBuilder builds these in the first place.
-function formatFilters(filters: Record<string, [string, string][]>): string {
+function formatFilters(filters: WeeklyHours): string {
   const byWindow = new Map<string, string[]>();
   for (const day of DAY_ORDER) {
     for (const [start, end] of filters[day] ?? []) {

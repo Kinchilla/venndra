@@ -4,6 +4,7 @@ import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { computeGroupAvailability } from "../../../../../lib/availability";
 import { checkRateLimit } from "../../../../../lib/rateLimit";
+import { asWeeklyHours } from "../../../../../lib/searchWindow";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -28,7 +29,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
 
   let slots = await computeGroupAvailability({
     creatorTimezone: event.timezone,
-    filters: event.filters as any,
+    filters: asWeeklyHours(event.filters) ?? {},
     durationMin: event.durationMin,
     searchStart: event.searchStart,
     searchEnd: event.searchEnd,

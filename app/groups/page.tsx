@@ -4,6 +4,7 @@ import Link from "next/link";
 import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import { buttonClass } from "../../lib/buttonStyles";
+import { asWeeklyHours } from "../../lib/searchWindow";
 import BackButton from "../../components/BackButton";
 import GroupChip from "../../components/GroupChip";
 import Paginated from "../../components/Paginated";
@@ -56,7 +57,7 @@ export default async function GroupsPage() {
                 name: byEmail.get(email)?.name ?? null,
                 image: byEmail.get(email)?.image ?? null,
               }))}
-              filters={(g.defaultFilters as any) ?? {}}
+              filters={asWeeklyHours(g.defaultFilters) ?? {}}
             />
           ))}
         </Paginated>

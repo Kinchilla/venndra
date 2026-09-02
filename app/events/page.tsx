@@ -5,6 +5,7 @@ import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import { buttonClass } from "../../lib/buttonStyles";
 import { displayName } from "../../lib/displayName";
+import { asWeeklyHours } from "../../lib/searchWindow";
 import BackButton from "../../components/BackButton";
 import EventChip from "../../components/EventChip";
 import ClearSectionButton from "../../components/ClearSectionButton";
@@ -125,7 +126,7 @@ function EventSection({
                   durationMin: e.durationMin,
                   searchStart: e.searchStart.toISOString(),
                   searchEnd: e.searchEnd.toISOString(),
-                  filters: e.filters,
+                  filters: asWeeklyHours(e.filters) ?? {},
                   minAttendees: e.minAttendees,
                   confirmedStart: e.confirmedStart?.toISOString() ?? null,
                   confirmedEnd: e.confirmedEnd?.toISOString() ?? null,

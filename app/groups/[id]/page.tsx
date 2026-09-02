@@ -4,6 +4,7 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import BackButton from "../../../components/BackButton";
 import GroupForm from "../../../components/GroupForm";
+import { asWeeklyHours } from "../../../lib/searchWindow";
 
 export default async function EditGroupPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -28,8 +29,8 @@ export default async function EditGroupPage(props: { params: Promise<{ id: strin
         groupId={group.id}
         initialName={group.name}
         initialEmails={group.emails}
-        initialFilters={(group.defaultFilters as any) ?? undefined}
-        userDefaultFilters={(user?.defaultSearchFilters as any) ?? null}
+        initialFilters={asWeeklyHours(group.defaultFilters) ?? undefined}
+        userDefaultFilters={asWeeklyHours(user?.defaultSearchFilters)}
       />
     </main>
   );

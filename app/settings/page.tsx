@@ -9,7 +9,7 @@ import { smsConfigured } from "../../lib/sms";
 import BackButton from "../../components/BackButton";
 import ProfileForm from "../../components/ProfileForm";
 import DefaultSearchTimesForm from "../../components/DefaultSearchTimesForm";
-import type { WeeklyHours } from "../../lib/searchWindow";
+import { asWeeklyHours } from "../../lib/searchWindow";
 import CalendarSourcesPanel from "../../components/CalendarSourcesPanel";
 import ConnectedAccountsSection from "../../components/ConnectedAccountsSection";
 import LogoutButton from "../../components/LogoutButton";
@@ -109,7 +109,7 @@ export default async function SettingsPage(
           Set your own default for the "Only look at" filter on new searches, instead of the app's built-in default (Mon–Fri, 6–10pm). Starting a search from a saved group still overrides this, same as today.
         </p>
         <div className="mt-3">
-          <DefaultSearchTimesForm initialFilters={(user.defaultSearchFilters as WeeklyHours | null) ?? null} />
+          <DefaultSearchTimesForm initialFilters={asWeeklyHours(user.defaultSearchFilters)} />
         </div>
       </section>
 

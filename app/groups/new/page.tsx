@@ -4,7 +4,7 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import BackButton from "../../../components/BackButton";
 import GroupForm from "../../../components/GroupForm";
-import type { WeeklyHours } from "../../../lib/searchWindow";
+import { asWeeklyHours } from "../../../lib/searchWindow";
 
 export default async function NewGroupPage() {
   const session = await getServerSession(authOptions);
@@ -25,7 +25,7 @@ export default async function NewGroupPage() {
       <BackButton fallbackHref="/groups" />
       <h1 className="font-display text-2xl font-semibold">New saved group</h1>
       <p className="mt-1 text-ink/60">Reuse this any time you need to find a slot with the same people.</p>
-      <GroupForm userDefaultFilters={(user?.defaultSearchFilters as WeeklyHours | null) ?? null} />
+      <GroupForm userDefaultFilters={asWeeklyHours(user?.defaultSearchFilters)} />
     </main>
   );
 }

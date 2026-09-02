@@ -4,7 +4,7 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { hasUsableCalendar } from "../../../lib/onboarding";
 import NewEventForm from "../../../components/NewEventForm";
-import type { WeeklyHours } from "../../../lib/searchWindow";
+import { asWeeklyHours } from "../../../lib/searchWindow";
 
 export default async function NewEventPage() {
   const session = await getServerSession(authOptions);
@@ -24,5 +24,5 @@ export default async function NewEventPage() {
   // Elsewhere a banner is enough -- see components/ConnectCalendarBanner.
   if (!(await hasUsableCalendar(userId))) redirect("/settings?needsCalendar=1");
 
-  return <NewEventForm initialDefaultFilters={(user.defaultSearchFilters as WeeklyHours | null) ?? null} />;
+  return <NewEventForm initialDefaultFilters={asWeeklyHours(user.defaultSearchFilters)} />;
 }

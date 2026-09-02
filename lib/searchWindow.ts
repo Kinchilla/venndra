@@ -13,6 +13,35 @@
  */
 export type WeeklyHours = Record<string, [string, string][]>;
 
+/**
+ * Reads a WeeklyHours back out of a Prisma `Json` column.
+ *
+ * Prisma types those columns as JsonValue -- "some JSON, shape unknown" --
+ * because that is all the database guarantees. Every reader therefore has to
+ * assert the shape, and before #30 seven of them did it in three different
+ * ways: `as WeeklyHours | null` three times, `as any` four times, and
+ * components/EventChip writing the shape out structurally for a third time.
+ *
+ * `as any` is the one worth removing. It does not assert a type, it switches
+ * checking off for the whole expression -- so `(row.filters as any).mon.typo`
+ * compiled fine and arrived as undefined. Same reason the session casts went
+ * in commit 0ff08a6.
+ *
+ * DELIBERATELY NOT VALIDATION. This is the same unchecked assertion the call
+ * sites were already making, in one place with the reasoning attached, and it
+ * is behaviour-identical to what it replaced. Validating for real is a
+ * separate decision with a separate question behind it -- what should the page
+ * do when a stored window turns out to be malformed? -- and lib/searchWindowSchema
+ * already has the validator for whoever answers it.
+ *
+ * Takes `unknown` rather than Prisma's JsonValue so this module stays free of
+ * a Prisma import: two client components import from here as a value, and
+ * dependencies should not travel that way even when they would be erased.
+ */
+export function asWeeklyHours(value: unknown): WeeklyHours | null {
+  return (value as WeeklyHours | null | undefined) ?? null;
+}
+
 
 /**
  * Does this saved-group filter set actually express a search window?
