@@ -7,6 +7,7 @@ import { deleteGoogleEvent } from "../../../../../lib/calendar/google";
 import { deleteMicrosoftEvent } from "../../../../../lib/calendar/microsoft";
 import { deleteAppleEvent } from "../../../../../lib/calendar/apple";
 import { createUpstreamEvent } from "../../../../../lib/upstreamEvents";
+import { jsonBody } from "../../../../../lib/requestBody";
 
 const reassignSchema = z.object({ newOrganizerUserId: z.string().min(1) });
 
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = reassignSchema.safeParse(await req.json());
+  const parsed = reassignSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const { newOrganizerUserId } = parsed.data;
 

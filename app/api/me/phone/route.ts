@@ -5,6 +5,7 @@ import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { parsePhone } from "../../../../lib/phone";
 import { resendPhoneVerification, startPhoneVerification } from "../../../../lib/phoneVerification";
+import { jsonBody } from "../../../../lib/requestBody";
 
 /**
  * The phone number on the signed-in account.
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
-  const parsed = saveSchema.safeParse(await req.json());
+  const parsed = saveSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: "Enter a phone number." }, { status: 400 });
 
   const phone = parsePhone(parsed.data.phone, parsed.data.country.toUpperCase());

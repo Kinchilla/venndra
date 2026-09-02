@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../lib/auth";
 import { rateLimitSubject, submitFeedback } from "../../../lib/feedback";
+import { jsonBody } from "../../../lib/requestBody";
 
 /**
  * Feature ideas and bug reports from the footer form.
@@ -41,7 +42,7 @@ const submitSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const parsed = submitSchema.safeParse(await req.json().catch(() => null));
+  const parsed = submitSchema.safeParse(await jsonBody(req));
   if (!parsed.success) {
     return NextResponse.json({ error: "That didn't look like a complete submission." }, { status: 400 });
   }

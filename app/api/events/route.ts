@@ -8,6 +8,7 @@ import { validateAllFriends, validateNoPausedInvitees } from "../../../lib/frien
 import { emailListField } from "../../../lib/emailIdentity";
 import { checkRateLimit } from "../../../lib/rateLimit";
 import { weeklyHoursSchema } from "../../../lib/searchWindowSchema";
+import { jsonBody } from "../../../lib/requestBody";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = eventSchema.safeParse(await req.json());
+  const parsed = eventSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const userId = session.user.id;

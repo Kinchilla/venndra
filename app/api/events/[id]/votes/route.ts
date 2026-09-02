@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
+import { jsonBody } from "../../../../../lib/requestBody";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -83,7 +84,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Connect a calendar before voting" }, { status: 400 });
   }
 
-  const parsed = ballotSchema.safeParse(await req.json());
+  const parsed = ballotSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const maxPicks = event.voteTopX ?? 10;

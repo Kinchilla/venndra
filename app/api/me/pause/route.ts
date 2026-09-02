@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
+import { jsonBody } from "../../../../lib/requestBody";
 
 const schema = z.object({ paused: z.boolean() });
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = schema.safeParse(await req.json());
+  const parsed = schema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   // Stamped fresh on every pause rather than preserved across an

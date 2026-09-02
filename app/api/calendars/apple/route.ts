@@ -7,6 +7,7 @@ import { encrypt } from "../../../../lib/crypto";
 import { syncParticipantStatusForUser } from "../../../../lib/participants";
 import { populateCalendarSources } from "../../../../lib/calendarSources";
 import { emailField } from "../../../../lib/emailIdentity";
+import { jsonBody } from "../../../../lib/requestBody";
 
 const appleSchema = z.object({
   // The iCloud email, used as the CalDAV username. Normalised (lib/emailIdentity)
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = appleSchema.safeParse(await req.json());
+  const parsed = appleSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const { appleId, appSpecificPassword, label } = parsed.data;

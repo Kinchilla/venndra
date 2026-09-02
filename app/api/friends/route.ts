@@ -5,6 +5,7 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { emailField } from "../../../lib/emailIdentity";
 import { checkRateLimit } from "../../../lib/rateLimit";
+import { jsonBody } from "../../../lib/requestBody";
 
 const USER_SELECT = { id: true, name: true, email: true, image: true, pausedAt: true };
 
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many friend requests — wait a moment and try again." }, { status: 429 });
   }
 
-  const parsed = requestSchema.safeParse(await req.json());
+  const parsed = requestSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
 
   const target = await prisma.user.findUnique({

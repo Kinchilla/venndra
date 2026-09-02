@@ -9,6 +9,7 @@ import { deleteUpstreamEvent, removeAttendeeFromUpstreamEvent, UpstreamEvent } f
 import { normalizeEmail } from "../../../lib/emailIdentity";
 import { forgetRateLimitSubjects } from "../../../lib/rateLimit";
 import { weeklyHoursSchema } from "../../../lib/searchWindowSchema";
+import { jsonBody } from "../../../lib/requestBody";
 
 const schema = z.object({
   // Trimmed, and an empty result becomes null rather than "".
@@ -42,7 +43,7 @@ export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = schema.safeParse(await req.json());
+  const parsed = schema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   // Prisma's Json? fields treat a plain JS `null` as ambiguous -- it can't

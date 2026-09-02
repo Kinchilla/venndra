@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
+import { jsonBody } from "../../../../../lib/requestBody";
 
 const patchSchema = z.object({
   checkAvailability: z.boolean().optional(),
@@ -15,7 +16,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const userId = session.user.id;
-  const parsed = patchSchema.safeParse(await req.json());
+  const parsed = patchSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const source = await prisma.calendarSource.findUnique({

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "../../../../../lib/auth";
 import { redeemPhoneToken } from "../../../../../lib/phoneVerification";
+import { jsonBody } from "../../../../../lib/requestBody";
 
 /**
  * Redeem a verification token.
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = z.object({ token: z.string().min(1).max(64) }).safeParse(await req.json());
+  const parsed = z.object({ token: z.string().min(1).max(64) }).safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: "That link is missing its code." }, { status: 400 });
 
   const result = await redeemPhoneToken(parsed.data.token, session.user.id);

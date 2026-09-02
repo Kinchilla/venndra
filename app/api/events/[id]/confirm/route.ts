@@ -7,6 +7,7 @@ import { updateGoogleEventTime } from "../../../../../lib/calendar/google";
 import { updateMicrosoftEventTime } from "../../../../../lib/calendar/microsoft";
 import { updateAppleEventTime } from "../../../../../lib/calendar/apple";
 import { createUpstreamEvent } from "../../../../../lib/upstreamEvents";
+import { jsonBody } from "../../../../../lib/requestBody";
 
 const confirmSchema = z.object({ start: z.string().datetime() });
 
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = confirmSchema.safeParse(await req.json());
+  const parsed = confirmSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const event = await prisma.event.findUnique({

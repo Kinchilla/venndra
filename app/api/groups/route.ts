@@ -6,6 +6,7 @@ import { prisma } from "../../../lib/prisma";
 import { validateAllFriends } from "../../../lib/friends";
 import { checkRateLimit } from "../../../lib/rateLimit";
 import { savedGroupSchema } from "../../../lib/savedGroupSchema";
+import { jsonBody } from "../../../lib/requestBody";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = savedGroupSchema.safeParse(await req.json());
+  const parsed = savedGroupSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const userId = session.user.id;

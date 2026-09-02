@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../../../lib/prisma";
 import { validateAllFriends } from "../../../../lib/friends";
 import { savedGroupSchema } from "../../../../lib/savedGroupSchema";
+import { jsonBody } from "../../../../lib/requestBody";
 
 async function getOwnedGroup(id: string, userId: string) {
   const group = await prisma.savedGroup.findUnique({ where: { id } });
@@ -31,7 +32,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
   const existing = await getOwnedGroup(params.id, session.user.id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const parsed = savedGroupSchema.safeParse(await req.json());
+  const parsed = savedGroupSchema.safeParse(await jsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   if (!session.user.email) return NextResponse.json({ error: "Account has no email on file" }, { status: 400 });
