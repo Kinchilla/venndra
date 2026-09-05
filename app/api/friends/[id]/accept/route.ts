@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/prisma";
 import { currentUser, unauthorized } from "../../../../../lib/session";
+import { notifyUser } from "../../../../../lib/notifications/send";
+import { friendRequestAcceptedEmail } from "../../../../../lib/notifications/templates";
 
 export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -15,5 +17,6 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   }
 
   const updated = await prisma.friendship.update({ where: { id: params.id }, data: { status: "ACCEPTED" } });
+  await notifyUser(friendship.requesterId, "friend_request_accepted", () => friendRequestAcceptedEmail(sessionUser));
   return NextResponse.json({ friendship: updated });
 }

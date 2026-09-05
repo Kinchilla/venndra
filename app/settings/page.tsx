@@ -10,6 +10,7 @@ import DefaultSearchTimesForm from "../../components/DefaultSearchTimesForm";
 import { asWeeklyHours } from "../../lib/searchWindow";
 import CalendarSourcesPanel from "../../components/CalendarSourcesPanel";
 import ConnectedAccountsSection from "../../components/ConnectedAccountsSection";
+import NotificationSettingsForm from "../../components/NotificationSettingsForm";
 import LogoutButton from "../../components/LogoutButton";
 import AccountManagement from "../../components/AccountManagement";
 import { currentUser } from "../../lib/session";
@@ -129,6 +130,16 @@ export default async function SettingsPage(
           Venndra entirely.
         </p>
         <ConnectedAccountsSection />
+      </section>
+
+      <section className="mt-10">
+        <h2 className="font-display text-lg font-semibold">Notifications</h2>
+        <p className="mt-1 text-sm text-ink/50">
+          Choose which activity emails you.
+        </p>
+        <div className="mt-3">
+          <NotificationSettingsForm initialPrefs={user.notificationPrefs} />
+        </div>
       </section>
 
       {/* Last on the page on purpose, but otherwise an ordinary section like

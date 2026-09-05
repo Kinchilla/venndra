@@ -7,6 +7,8 @@ import { updateAppleEventTime } from "../../../../../lib/calendar/apple";
 import { createUpstreamEvent } from "../../../../../lib/upstreamEvents";
 import { jsonBody } from "../../../../../lib/requestBody";
 import { currentUser, unauthorized } from "../../../../../lib/session";
+import { notifyUsers } from "../../../../../lib/notifications/send";
+import { eventConfirmedEmail } from "../../../../../lib/notifications/templates";
 
 const confirmSchema = z.object({ start: z.string().datetime() });
 
@@ -135,6 +137,16 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       writeCalendarSourceId: writeSource.id,
     },
   });
+
+  // Every other participant -- the organizer is the one who just confirmed,
+  // so they don't need telling. `participants` still carries userId from the
+  // findUnique above (a plain include, not a narrowed select).
+  const otherParticipantIds = event.participants
+    .map((p) => p.userId)
+    .filter((id): id is string => !!id && id !== userId);
+  await notifyUsers(otherParticipantIds, "event_confirmed", () =>
+    eventConfirmedEmail(sessionUser, { id: event.id, title: event.title, confirmedStart: start, timezone: event.timezone })
+  );
 
   return NextResponse.json({ event: updated });
 }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/prisma";
 import { removeAttendeeFromUpstreamEvent } from "../../../../../lib/upstreamEvents";
 import { currentUser, unauthorized } from "../../../../../lib/session";
+import { notifyUser } from "../../../../../lib/notifications/send";
+import { participantLeftEventEmail } from "../../../../../lib/notifications/templates";
 
 export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -37,6 +39,10 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   // Cascades to delete this participant's EventVote rows automatically
   // (see EventVote.participantId's onDelete: Cascade in schema.prisma).
   await prisma.eventParticipant.delete({ where: { id: participant.id } });
+
+  // The organizer check above guarantees creatorId !== the leaving user, so
+  // this is never self-notifying.
+  await notifyUser(event.creatorId, "participant_left_event", () => participantLeftEventEmail(sessionUser, { id: event.id, title: event.title }));
 
   return NextResponse.json({ ok: true });
 }

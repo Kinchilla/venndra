@@ -6,6 +6,8 @@ import { checkRateLimit } from "../../../lib/rateLimit";
 import { jsonBody } from "../../../lib/requestBody";
 import { loadFriendLists } from "../../../lib/friends";
 import { currentUser, unauthorized } from "../../../lib/session";
+import { notifyUser } from "../../../lib/notifications/send";
+import { friendRequestReceivedEmail, friendRequestAcceptedEmail } from "../../../lib/notifications/templates";
 
 export async function GET() {
   const sessionUser = await currentUser();
@@ -96,6 +98,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You're already friends." }, { status: 409 });
     }
     const updated = await prisma.friendship.update({ where: { id: reverse.id }, data: { status: "ACCEPTED" } });
+    // `target` sent the original request that this just auto-completes --
+    // it's their acceptance to hear about, not the current user's. Awaited,
+    // not fired-and-forgotten: a serverless function can be frozen the
+    // instant the response goes out, and notifyUser already can't fail this
+    // request (it never throws -- see lib/notifications/send.ts).
+    await notifyUser(target.id, "friend_request_accepted", () => friendRequestAcceptedEmail(sessionUser));
     return NextResponse.json({ friendship: updated, autoAccepted: true });
   }
 
@@ -112,5 +120,6 @@ export async function POST(req: NextRequest) {
   const friendship = await prisma.friendship.create({
     data: { requesterId: userId, addresseeId: target.id, status: "PENDING" },
   });
+  await notifyUser(target.id, "friend_request_received", () => friendRequestReceivedEmail(sessionUser));
   return NextResponse.json({ friendship }, { status: 201 });
 }

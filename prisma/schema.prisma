@@ -112,6 +112,14 @@ model User {
   // through the helpers in lib/pause.ts rather than comparing dates here.
   pausedAt DateTime?
 
+  // Per-trigger email opt-outs. Sparse on purpose: an absent key means "on,"
+  // so every trigger defaults enabled without a migration to backfill
+  // existing rows, and adding a new trigger later (see
+  // lib/notifications/triggers.ts) is a registry entry, not a schema change.
+  // Only an explicit `false` here turns one off. No SMS/push equivalent yet
+  // -- those channels don't exist (issue #7's build order puts email first).
+  notificationPrefs Json?
+
   accounts           Account[]
   sessions           Session[]
   connectedCalendars ConnectedCalendar[]

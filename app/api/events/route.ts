@@ -8,6 +8,8 @@ import { checkRateLimit } from "../../../lib/rateLimit";
 import { weeklyHoursSchema } from "../../../lib/searchWindowSchema";
 import { jsonBody } from "../../../lib/requestBody";
 import { currentUser, unauthorized } from "../../../lib/session";
+import { notifyUsers } from "../../../lib/notifications/send";
+import { addedToEventEmail } from "../../../lib/notifications/templates";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -173,6 +175,18 @@ export async function POST(req: NextRequest) {
     },
     include: { participants: true },
   });
+
+  // Every invited email but the creator's own -- reusing the userByEmail
+  // lookup already built above rather than re-querying. It's guaranteed to
+  // resolve for every OTHER invitee: event creation requires them to already
+  // be an accepted friend (validateAllFriends), and friending requires an
+  // existing Venndra account, so there's no invited address here without a
+  // matching user (see the memory on this -- it keeps coming up).
+  const invitedUserIds = allEmails
+    .filter((email) => email !== creatorEmail)
+    .map((email) => userByEmail.get(email)?.id)
+    .filter((id): id is string => !!id);
+  await notifyUsers(invitedUserIds, "added_to_event", () => addedToEventEmail(sessionUser, { id: event.id, title: event.title }));
 
   return NextResponse.json({ event }, { status: 201 });
 }

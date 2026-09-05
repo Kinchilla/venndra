@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/prisma";
 import { deleteUpstreamEvent } from "../../../../../lib/upstreamEvents";
 import { currentUser, unauthorized } from "../../../../../lib/session";
+import { notifyUsers } from "../../../../../lib/notifications/send";
+import { eventCancelledEmail } from "../../../../../lib/notifications/templates";
 
 export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const sessionUser = await currentUser();
   if (!sessionUser) return unauthorized();
 
-  const event = await prisma.event.findUnique({ where: { id: params.id } });
+  const event = await prisma.event.findUnique({ where: { id: params.id }, include: { participants: true } });
   if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const userId = sessionUser.id;
@@ -28,5 +30,11 @@ export async function POST(_req: NextRequest, props: { params: Promise<{ id: str
   await deleteUpstreamEvent(event);
 
   const updated = await prisma.event.update({ where: { id: event.id }, data: { status: "CANCELLED" } });
+
+  const otherParticipantIds = event.participants
+    .map((p) => p.userId)
+    .filter((id): id is string => !!id && id !== userId);
+  await notifyUsers(otherParticipantIds, "event_cancelled", () => eventCancelledEmail(sessionUser, { id: event.id, title: event.title }));
+
   return NextResponse.json({ event: updated });
 }
